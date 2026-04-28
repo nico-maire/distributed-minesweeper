@@ -1,9 +1,11 @@
+import sys
 import socket
 import threading
 from model import Minesweeper
 from protocol import send_message, receive_message
 
 clients = []
+slave_socket = None
 
 def broadcast(state_dict):
     """Envía el nuevo estado del juego a todos los clientes conectados."""
@@ -56,6 +58,9 @@ def handle_client(client_socket, address, game, game_lock):
                     
                 if needs_broadcast:
                     current_state = game.to_dict()
+                    # Replicación Síncrona: Asegura Consistencia Fuerte enviando primero al esclavo
+                    if not send_message(slave_socket, current_state):
+                        print("[!] Error replicating state to slave.")
             
             if needs_broadcast:
                 broadcast(current_state)
@@ -68,6 +73,16 @@ def handle_client(client_socket, address, game, game_lock):
         client_socket.close()
 
 def start_server(host='localhost', port=5000):
+    global slave_socket
+    # Conexión bloqueante al esclavo (Strong Consistency requirement)
+    try:
+        slave_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        slave_socket.connect(('localhost', 6000))
+        print("[*] Successfully connected to passive replica at localhost:6000")
+    except socket.error:
+        print("ERROR: Could not connect to replica")
+        sys.exit(1)
+
     game = Minesweeper(10, 10, 10)
     game_lock = threading.Lock()
     
