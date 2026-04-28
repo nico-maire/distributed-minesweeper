@@ -100,6 +100,8 @@ def receive_updates():
                     if conn_state.port_index < len(PORTS):
                         print("\n[!] Conexión perdida. Reconectando al servidor de respaldo...")
                         # Intenta reconectar
+                        print("[*] Esperando 1.5s para que el servidor de respaldo se estabilice...")
+                        time.sleep(1.5)
                         if connect_to_server():
                             continue
                         else:
