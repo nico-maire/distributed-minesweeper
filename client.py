@@ -92,24 +92,32 @@ def receive_updates():
             
         state = receive_message(sock)
         if not state:
+            needs_reconnect = False
+            exhausted = False
             with conn_state.lock:
                 if sock == conn_state.sock and conn_state.connected:
                     conn_state.connected = False
                     conn_state.port_index += 1
                     
                     if conn_state.port_index < len(PORTS):
-                        print("\n[!] Conexión perdida. Reconectando al servidor de respaldo...")
-                        # Intenta reconectar
-                        print("[*] Esperando 1.5s para que el servidor de respaldo se estabilice...")
-                        time.sleep(1.5)
-                        if connect_to_server():
-                            continue
-                        else:
-                            print("\n[!] Exhausted all servers. Press Enter to exit.")
-                            break
+                        needs_reconnect = True
                     else:
-                        print("\n[!] Connection to server lost and no backups available. Press Enter to exit.")
-                        break
+                        exhausted = True
+                        
+            if exhausted:
+                print("\n[!] Connection to server lost and no backups available. Press Enter to exit.")
+                break
+                
+            if needs_reconnect:
+                print("\n[!] Conexión perdida. Reconectando al servidor de respaldo...")
+                print("[*] Esperando 1.5s para que el servidor de respaldo se estabilice...")
+                time.sleep(1.5)
+                if connect_to_server():
+                    continue
+                else:
+                    print("\n[!] Exhausted all servers. Press Enter to exit.")
+                    break
+                    
             continue
             
         print_board(state)
