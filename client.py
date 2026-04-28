@@ -1,4 +1,5 @@
 import socket
+import threading
 from protocol import send_message, receive_message
 
 def print_board(state):
@@ -31,19 +32,42 @@ def print_board(state):
         print(" ".join(row_display))
     print()
 
+def receive_updates(sock):
+    """
+    Función que corre en un hilo separado para recibir el estado
+    del juego asíncronamente y pintar el tablero si ocurren cambios.
+    """
+    while True:
+        state = receive_message(sock)
+        if not state:
+            print("\n[!] Connection to server lost. Press Enter to exit.")
+            break
+            
+        print_board(state)
+        
+        if state['state'] != 'playing':
+            print(f"> Game Over! You {state['state']}.")
+            print("> Enter 'restart' to play again or 'q' to quit.")
+
 def start_client(host='localhost', port=5000):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         client_socket.connect((host, port))
         print(f"[*] Connected to server at {host}:{port}")
         
-        # Recibir estado inicial
-        initial_state = receive_message(client_socket)
-        if initial_state:
-            print_board(initial_state)
+        # Iniciar hilo de escucha en modo 'daemon' para que se cierre al terminar la app principal
+        listener_thread = threading.Thread(target=receive_updates, args=(client_socket,))
+        listener_thread.daemon = True
+        listener_thread.start()
             
         while True:
-            cmd = input("Enter action (e.g., 'r 2 3' to reveal, 'f 2 3' to flag, 'q' to quit): ").strip().split()
+            try:
+                # El hilo de main queda única y exclusivamente a expensas del input del user.
+                cmd_line = input()
+            except (EOFError, KeyboardInterrupt):
+                break
+                
+            cmd = cmd_line.strip().split()
             if not cmd:
                 continue
                 
@@ -51,6 +75,10 @@ def start_client(host='localhost', port=5000):
             
             if command_type == 'q':
                 break
+            elif command_type == 'restart':
+                if not send_message(client_socket, {'action': 'restart'}):
+                    break
+                continue
                 
             action = ''
             if command_type == 'r':
@@ -58,7 +86,7 @@ def start_client(host='localhost', port=5000):
             elif command_type == 'f':
                 action = 'flag'
             else:
-                print("Unknown command. Use 'r r c' or 'f r c' or 'q'.")
+                print("Unknown command. Use 'r row col' or 'f row col', 'restart' or 'q'.")
                 continue
                 
             if len(cmd) < 3:
@@ -76,24 +104,6 @@ def start_client(host='localhost', port=5000):
             if not send_message(client_socket, msg):
                 print("Failed to send message.")
                 break
-                
-            state = receive_message(client_socket)
-            if not state:
-                print("Connection to server lost.")
-                break
-                
-            print_board(state)
-            
-            if state['state'] != 'playing':
-                print(f"Game over! You {state['state']}.")
-                restart = input("Play again? (y/n): ")
-                if restart.lower().startswith('y'):
-                    send_message(client_socket, {'action': 'restart'})
-                    state = receive_message(client_socket)
-                    if not state: break
-                    print_board(state)
-                else:
-                    break
     
     except ConnectionRefusedError:
         print("[!] Could not connect to the server. Is it running?")
