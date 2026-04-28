@@ -24,7 +24,8 @@ def handle_client(client_socket, address, game, game_lock):
     print(f"[*] Client connected from {address}")
     clients.append(client_socket)
     
-    # Enviar estado inicial seguro
+    # Regla de oro 1 (Evitar Ceguera):
+    # Enviar estado inicial seguro al cliente reconectado para repintar el tablero.
     with game_lock:
         initial_state = game.to_dict()
     send_message(client_socket, initial_state)
@@ -42,6 +43,8 @@ def handle_client(client_socket, address, game, game_lock):
             
             needs_broadcast = False
             
+            # Regla de oro 2 (Último nodo vivo):
+            # Solo actualizar estado local y enviar broadcast a clientes sin replicar a ningún lado.
             with game_lock:
                 if action == 'reveal':
                     game.reveal(r, c)
