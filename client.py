@@ -98,7 +98,7 @@ def receive_updates():
                     conn_state.port_index += 1
                     
                     if conn_state.port_index < len(PORTS):
-                        print("\n[!] Connection lost. Attempting to reconnect to backup server...")
+                        print("\n[!] Conexión perdida. Reconectando al servidor de respaldo...")
                         # Intenta reconectar
                         if connect_to_server():
                             continue
