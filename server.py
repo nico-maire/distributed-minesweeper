@@ -1,15 +1,10 @@
 import sys
 import os
+import time
 import socket
 import threading
-import time
 from model import Minesweeper
 from protocol import send_message, receive_message
-
-HOST = os.environ.get('HOST', '0.0.0.0')
-PORT = int(os.environ.get('PORT', 5000))
-SLAVE_HOST = os.environ.get('SLAVE_HOST', 'localhost')
-SLAVE_PORT = int(os.environ.get('SLAVE_PORT', 6000))
 
 clients = []
 slave_socket = None
@@ -79,31 +74,34 @@ def handle_client(client_socket, address, game, game_lock):
             clients.remove(client_socket)
         client_socket.close()
 
-def start_server(host=HOST, port=PORT):
+def start_server():
     global slave_socket
+    
+    # Lectura segura desde el interior
+    HOST = os.environ.get('HOST', '0.0.0.0')
+    PORT = int(os.environ.get('PORT', 5000))
+    SLAVE_HOST = os.environ.get('SLAVE_HOST', 'localhost')
+    SLAVE_PORT = int(os.environ.get('SLAVE_PORT', 6000))
+    
     slave_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while True:
         try:
             slave_socket.connect((SLAVE_HOST, SLAVE_PORT))
             print(f"[*] Successfully connected to passive replica at {SLAVE_HOST}:{SLAVE_PORT}")
             break
-        except ConnectionRefusedError:
+        except socket.error as e:
             print("Esperando a que la réplica (follower) esté lista...")
             time.sleep(2)
-        except socket.error as e:
-            print(f"ERROR conectando a réplica: {e}")
-            time.sleep(2OR: Could not connect to replica")
-        sys.exit(1)
 
     game = Minesweeper(10, 10, 10)
     game_lock = threading.Lock()
     
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.bind((host, port))
+    server_socket.bind((HOST, PORT))
     server_socket.listen(5)
     
-    print(f"[*] Server listening on {host}:{port} with multi-threading...")
+    print(f"[*] Server listening on {HOST}:{PORT} with multi-threading...")
     
     try:
         while True:
