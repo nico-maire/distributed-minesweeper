@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  leader:
+    build: .
+    command: python server.py
+    ports:
+      - "5000:5000"
+    environment:
+      - SLAVE_HOST=follower
+    networks:
+      - minesweeper-net
+
+  follower:
+    build: .
+    command: python slave.py
+    ports:
+      - "6000:6000"
+    networks:
+      - minesweeper-net
+
+networks:
+  minesweeper-net:
+    driver: bridge
