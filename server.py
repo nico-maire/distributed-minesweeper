@@ -1,8 +1,14 @@
 import sys
+import os
 import socket
 import threading
 from model import Minesweeper
 from protocol import send_message, receive_message
+
+HOST = os.environ.get('HOST', '0.0.0.0')
+PORT = int(os.environ.get('PORT', 5000))
+SLAVE_HOST = os.environ.get('SLAVE_HOST', 'localhost')
+SLAVE_PORT = int(os.environ.get('SLAVE_PORT', 6000))
 
 clients = []
 slave_socket = None
@@ -72,13 +78,13 @@ def handle_client(client_socket, address, game, game_lock):
             clients.remove(client_socket)
         client_socket.close()
 
-def start_server(host='localhost', port=5000):
+def start_server(host=HOST, port=PORT):
     global slave_socket
     # Conexión bloqueante al esclavo (Strong Consistency requirement)
     try:
         slave_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        slave_socket.connect(('localhost', 6000))
-        print("[*] Successfully connected to passive replica at localhost:6000")
+        slave_socket.connect((SLAVE_HOST, SLAVE_PORT))
+        print(f"[*] Successfully connected to passive replica at {SLAVE_HOST}:{SLAVE_PORT}")
     except socket.error:
         print("ERROR: Could not connect to replica")
         sys.exit(1)

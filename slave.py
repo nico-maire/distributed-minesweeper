@@ -1,7 +1,11 @@
+import os
 import socket
 import threading
 from model import Minesweeper
 from protocol import send_message, receive_message
+
+HOST = os.environ.get('HOST', '0.0.0.0')
+PORT = int(os.environ.get('PORT', 6000))
 
 clients = []
 
@@ -70,7 +74,7 @@ def handle_client(client_socket, address, game, game_lock):
             clients.remove(client_socket)
         client_socket.close()
 
-def start_slave(host='localhost', port=6000):
+def start_slave(host=HOST, port=PORT):
     # Inicializar una instancia dummy de Minesweeper
     local_replica = Minesweeper(1, 1, 0)
     

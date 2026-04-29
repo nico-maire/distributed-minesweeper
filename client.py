@@ -1,11 +1,16 @@
+import os
 import socket
 import threading
 import time
 import sys
 from protocol import send_message, receive_message
 
-PORTS = [5000, 6000]
-HOST = 'localhost'
+LEADER_HOST = os.environ.get('LEADER_HOST', 'localhost')
+LEADER_PORT = int(os.environ.get('LEADER_PORT', 5000))
+SLAVE_HOST = os.environ.get('SLAVE_HOST', 'localhost')
+SLAVE_PORT = int(os.environ.get('SLAVE_PORT', 6000))
+
+NODES = [(LEADER_HOST, LEADER_PORT), (SLAVE_HOST, SLAVE_PORT)]
 
 class ConnectionState:
     def __init__(self):
@@ -24,22 +29,22 @@ def connect_to_server():
             except:
                 pass
         
-        while conn_state.port_index < len(PORTS):
-            port = PORTS[conn_state.port_index]
+        while conn_state.port_index < len(NODES):
+            host, port = NODES[conn_state.port_index]
             try:
                 if conn_state.port_index > 0:
-                    print(f"\n[!] Connection lost. Attempting to reconnect to backup server on port {port}...")
+                    print(f"\n[!] Connection lost. Attempting to reconnect to backup server at {host}:{port}...")
                 else:
-                    print(f"[*] Attempting to connect to server at {HOST}:{port}...")
+                    print(f"[*] Attempting to connect to server at {host}:{port}...")
                     
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((HOST, port))
+                sock.connect((host, port))
                 conn_state.sock = sock
                 conn_state.connected = True
-                print(f"[*] Successfully connected to {HOST}:{port}")
+                print(f"[*] Successfully connected to {host}:{port}")
                 return True
             except socket.error:
-                print(f"[!] Could not connect to {HOST}:{port}")
+                print(f"[!] Could not connect to {host}:{port}")
                 conn_state.port_index += 1
                 time.sleep(1)
                 
@@ -99,7 +104,7 @@ def receive_updates():
                     conn_state.connected = False
                     conn_state.port_index += 1
                     
-                    if conn_state.port_index < len(PORTS):
+                    if conn_state.port_index < len(NODES):
                         needs_reconnect = True
                     else:
                         exhausted = True
