@@ -2,6 +2,7 @@ import sys
 import os
 import socket
 import threading
+import time
 from model import Minesweeper
 from protocol import send_message, receive_message
 
@@ -80,13 +81,18 @@ def handle_client(client_socket, address, game, game_lock):
 
 def start_server(host=HOST, port=PORT):
     global slave_socket
-    # Conexión bloqueante al esclavo (Strong Consistency requirement)
-    try:
-        slave_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        slave_socket.connect((SLAVE_HOST, SLAVE_PORT))
-        print(f"[*] Successfully connected to passive replica at {SLAVE_HOST}:{SLAVE_PORT}")
-    except socket.error:
-        print("ERROR: Could not connect to replica")
+    slave_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    while True:
+        try:
+            slave_socket.connect((SLAVE_HOST, SLAVE_PORT))
+            print(f"[*] Successfully connected to passive replica at {SLAVE_HOST}:{SLAVE_PORT}")
+            break
+        except ConnectionRefusedError:
+            print("Esperando a que la réplica (follower) esté lista...")
+            time.sleep(2)
+        except socket.error as e:
+            print(f"ERROR conectando a réplica: {e}")
+            time.sleep(2OR: Could not connect to replica")
         sys.exit(1)
 
     game = Minesweeper(10, 10, 10)
