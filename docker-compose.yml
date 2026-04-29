@@ -3,7 +3,7 @@ version: '3.8'
 services:
   leader:
     build: .
-    command: python server.py
+    command: python -u server.py
     ports:
       - "5000:5000"
     environment:
@@ -13,7 +13,7 @@ services:
 
   follower:
     build: .
-    command: python slave.py
+    command: python -u slave.py
     ports:
       - "6000:6000"
     networks:
