@@ -7,15 +7,29 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - SLAVE_HOST=follower
+      - SLAVE_HOST=follower-1
+      - SLAVE_PORT=6000
     networks:
       - minesweeper-net
 
-  follower:
+  follower-1:
     build: .
     command: python -u slave.py
     ports:
       - "6000:6000"
+    environment:
+      - NEXT_REPLICA_HOST=follower-2
+      - NEXT_REPLICA_PORT=7000
+    networks:
+      - minesweeper-net
+
+  follower-2:
+    build: .
+    command: python -u slave.py
+    ports:
+      - "7000:7000"
+    environment:
+      - PORT=7000
     networks:
       - minesweeper-net
 

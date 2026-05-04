@@ -7,10 +7,16 @@ from protocol import send_message, receive_message
 
 LEADER_HOST = os.environ.get('LEADER_HOST', 'localhost')
 LEADER_PORT = int(os.environ.get('LEADER_PORT', 5000))
-SLAVE_HOST = os.environ.get('SLAVE_HOST', 'localhost')
-SLAVE_PORT = int(os.environ.get('SLAVE_PORT', 6000))
+SLAVE_1_HOST = os.environ.get('SLAVE_1_HOST', 'localhost')
+SLAVE_1_PORT = int(os.environ.get('SLAVE_1_PORT', 6000))
+SLAVE_2_HOST = os.environ.get('SLAVE_2_HOST', 'localhost')
+SLAVE_2_PORT = int(os.environ.get('SLAVE_2_PORT', 7000))
 
-NODES = [(LEADER_HOST, LEADER_PORT), (SLAVE_HOST, SLAVE_PORT)]
+NODES = [
+    (LEADER_HOST, LEADER_PORT), 
+    (SLAVE_1_HOST, SLAVE_1_PORT),
+    (SLAVE_2_HOST, SLAVE_2_PORT)
+]
 
 class ConnectionState:
     def __init__(self):
