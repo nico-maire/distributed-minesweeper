@@ -1,6 +1,7 @@
 import os
 import socket
 import threading
+import time
 from model import Minesweeper
 from protocol import send_message, receive_message
 
@@ -24,7 +25,7 @@ def broadcast(state_dict):
         if c in clients:
             clients.remove(c)
 
-def handle_client(client_socket, address, game, game_lock):
+def handle_client(client_socket, address, game, game_lock, next_replica_socket=None):
     print(f"[*] Client connected from {address}")
     clients.append(client_socket)
     
@@ -66,6 +67,11 @@ def handle_client(client_socket, address, game, game_lock):
             
             if needs_broadcast:
                 broadcast(current_state)
+                if next_replica_socket:
+                    try:
+                        send_message(next_replica_socket, current_state)
+                    except Exception as e:
+                        print(f"[!] Error forwarding to next replica: {e}")
                 
     except Exception as e:
         print(f"[*] Client {address} error: {e}")
@@ -75,6 +81,23 @@ def handle_client(client_socket, address, game, game_lock):
         client_socket.close()
 
 def start_slave(host=HOST, port=PORT):
+    NEXT_REPLICA_HOST = os.environ.get('NEXT_REPLICA_HOST')
+    NEXT_REPLICA_PORT = os.environ.get('NEXT_REPLICA_PORT')
+    
+    next_replica_socket = None
+    if NEXT_REPLICA_HOST and NEXT_REPLICA_PORT:
+        NEXT_REPLICA_PORT = int(NEXT_REPLICA_PORT)
+        print(f"[*] Connecting to next replica at {NEXT_REPLICA_HOST}:{NEXT_REPLICA_PORT}...")
+        while True:
+            try:
+                next_replica_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                next_replica_socket.connect((NEXT_REPLICA_HOST, NEXT_REPLICA_PORT))
+                print("[*] Connected to next replica successfully.")
+                break
+            except socket.error as e:
+                print(f"[*] Connection failed: {e}. Retrying in 2 seconds...")
+                time.sleep(2)
+
     # Inicializar una instancia dummy de Minesweeper
     local_replica = Minesweeper(1, 1, 0)
     
@@ -100,6 +123,11 @@ def start_slave(host=HOST, port=PORT):
             try:
                 local_replica = Minesweeper.from_dict(data)
                 print("[*] Received replica state")
+                if next_replica_socket:
+                    try:
+                        send_message(next_replica_socket, data)
+                    except Exception as e:
+                        print(f"[!] Error forwarding to next replica: {e}")
             except KeyError as e:
                 print(f"[!] Invalid state format received, missing key: {e}")
             except Exception as e:
@@ -127,7 +155,7 @@ def start_slave(host=HOST, port=PORT):
             client_socket, address = slave_socket.accept()
             client_thread = threading.Thread(
                 target=handle_client, 
-                args=(client_socket, address, local_replica, game_lock)
+                args=(client_socket, address, local_replica, game_lock, next_replica_socket)
             )
             client_thread.daemon = True
             client_thread.start()
