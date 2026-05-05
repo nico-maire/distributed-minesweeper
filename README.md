@@ -1,31 +1,39 @@
-# 💣 Distributed Minesweeper - Proyecto Sistemas Distribuidos
+# 💣 Distributed Minesweeper - Distributed Systems Project
 
-¡Bienvenido al proyecto! Hemos construido una arquitectura distribuida desde cero basada en Python puro y Sockets TCP, priorizando la Tolerancia a Fallos, la Disponibilidad y la Consistencia Fuerte (tal y como pidió el profesor Omicini).
+Welcome to the project! We have built a distributed architecture from scratch based on pure Python and TCP Sockets, prioritizing Fault Tolerance, Availability, and Strong Consistency (just as requested by professor Omicini).
 
-## 🏗️ Arquitectura Actual (Fase 5 Completada)
+## 🏗️ Current Architecture (Final Phase Completed)
 
-Actualmente tenemos un modelo **Primary-Backup (Leader-Follower)** dockerizado. No usamos algoritmos de consenso complejos como Raft/Paxos para ahorrar tiempo; en su lugar, usamos una estrategia de **Failover Determinista**. No usamos Bases de Datos externas; nuestros nodos actúan como su propia BBDD en memoria.
+We currently have a containerized **Primary-Backup (Leader-Follower)** model. We do not use complex consensus algorithms like Raft/Paxos to save time; instead, we use a **Deterministic Failover** strategy. No external databases are used; our nodes act as their own in-memory DB.
 
-* **Leader (`server.py`):** Escucha en el puerto `5000`. Recibe las jugadas, actualiza su RAM, replica el estado al Follower para asegurar la *Consistencia Fuerte* y luego actualiza a los clientes.
-* **Follower (`slave.py`):** Escucha en el puerto `6000`. Es una réplica pasiva. Si el Leader cae, detecta el fallo de red, se "promociona" automáticamente a Leader y empieza a aceptar conexiones de los clientes.
-* **Dumb Clients (`client.py`):** No tienen lógica de juego. Si detectan que el Leader cae, tienen un algoritmo de *Retry with Backoff* (esperan 1.5s para evitar Race Conditions) y se reconectan automáticamente al puerto `6000` (el nuevo Leader), recuperando el tablero sin perder la partida.
+* **3 Nodes & Chain Replication:** The system is composed of 3 nodes replicating data sequentially. 
+  * **Leader (server.py):** Listens on port 5000. Receives moves from clients, updates its RAM, and replicates the state down the chain to **Follower-1** to ensure *Strong Consistency*.
+  * **Follower-1 (slave.py):** Listens on port 6000. Receives replication data from the Leader and forwards it to **Follower-2**. If the Leader crashes, it auto-promotes to Leader.
+  * **Follower-2 (slave.py):** Listens on port 7000. The tail of the chain. If Follower-1 crashes, it will take over as the new Leader.
+* **Dumb Clients (client.py):** They have no game logic. If they detect the Leader is down, they use a *Retry with Backoff* algorithm (waiting 1.5s to avoid Race Conditions) and automatically reconnect to the next available port in the sequence (6000, then 7000), recovering the board without losing the game state.
 
-## 🚀 Cómo ejecutar y testear el entorno
+## 🤝 Cooperative Multiplayer
 
-La infraestructura está orquestada con Docker. Para levantar el clúster:
+Multiple clients (client.py) can connect at the same time from different terminals to play together. The server manages concurrent threads for each connection and **broadcasts** the game state. This means all players see how the board updates in real time without needing to manually reload or refresh their screens.
 
-1. Asegúrate de tener Docker Desktop abierto.
-2. En la terminal, ejecuta: `docker compose up --build`
-3. Abre otras terminales normales (fuera de Docker) para los jugadores y ejecuta: `python client.py`
+## 🚀 How to run and test the environment
 
-### 🧪 Prueba de Tolerancia a Fallos (¡Haz esto para entenderlo!)
-1. Arranca el clúster con Docker y conecta dos clientes.
-2. Haz un par de movimientos en el juego.
-3. Ve a Docker Desktop y **apaga/mata el contenedor del Leader** (simulando un Crash Failure).
-4. Mira las terminales de los clientes: verás que detectan la caída, esperan, se reconectan al Follower (que ahora es el Leader) y el tablero vuelve a aparecer mágicamente para seguir jugando.
+The infrastructure is orchestrated with Docker. To bring up the cluster:
 
-## 🎯 Próximos Pasos
+1. Make sure you have Docker Desktop running.
+2. In your terminal, run: docker compose up --build
+3. Open normal terminals (outside of Docker) for the players and run: python client.py
 
-1. **Escalar a 3 Nodos (Sobresaliente):** Modificar el `docker-compose.yml` para añadir un `follower-2` en el puerto `7000`. Actualizar la lista `PORTS` del cliente para que tenga `[5000, 6000, 7000]`. Actualizar el Leader y el primer Follower para que repliquen los datos en cadena.
-2. **Mejoras visuales:** Darle un repaso al `client.py` por si quieres que el tablero se vea mejor.
-3. **El Reporte:** Empezar a redactar el documento en LaTeX justificando que hemos cumplido con Dependability, Communication, Replication y Orchestration.
+### 🧪 Fault Tolerance Test: Cascading Failure
+
+Follow these steps to see fault tolerance in action!
+1. Start the cluster with Docker and connect a couple of clients.
+2. Make a few moves in the game to see real-time multiplayer updates.
+3. Go to Docker Desktop and **kill/stop the Leader container** (simulating a Crash Failure).
+4. Watch the clients' terminals: they will detect the crash, wait, and auto-reconnect to **Follower-1** on port 6000 (which is now the Leader). The board will seamlessly reappear.
+5. **Cascading Failure:** Now, kill the **Follower-1** container.
+6. Watch the clients survive the second crash! They will auto-jump to port 7000 (**Follower-2**), proving our 3-node resilience.
+
+## 🎯 Next Steps
+
+1. **Final Report:** Begin drafting the Final Report in LaTeX, properly justifying our design decisions (Primary-Backup, Strong Consistency, Chain Replication, and Docker orchestration) and how we met the requirements for Dependability, Communication, Replication, and Orchestration.
