@@ -224,7 +224,7 @@ class MinesweeperGUI(tk.Tk):
                         break
                 continue
             # Update GUI in main thread
-            self.after(0, lambda: self.update_board(state))
+            self.after(0, lambda s=state: self.update_board(s))
 
 def connect_to_server():
     with conn_state.lock:
@@ -256,127 +256,6 @@ def connect_to_server():
         conn_state.connected = False
         print("\n[!] All servers are down. Exiting.")
         return False
-
-def print_board(state):
-    pass  # Removed for GUI
-
-def receive_updates():
-    """
-    Función que corre en un hilo separado para recibir el estado
-    del juego asíncronamente y pintar el tablero si ocurren cambios.
-    """
-    while True:
-        with conn_state.lock:
-            sock = conn_state.sock
-        
-        if not conn_state.connected or not sock:
-            time.sleep(0.5)
-            continue
-            
-        state = receive_message(sock)
-        if not state:
-            needs_reconnect = False
-            exhausted = False
-            with conn_state.lock:
-                if sock == conn_state.sock and conn_state.connected:
-                    conn_state.connected = False
-                    conn_state.port_index += 1
-                    
-                    if conn_state.port_index < len(NODES):
-                        needs_reconnect = True
-                    else:
-                        exhausted = True
-                        
-            if exhausted:
-                print("\n[!] Connection to server lost and no backups available. Press Enter to exit.")
-                break
-                
-            if needs_reconnect:
-                print("\n[!] Conexión perdida. Reconectando al servidor de respaldo...")
-                print("[*] Esperando 1.5s para que el servidor de respaldo se estabilice...")
-                time.sleep(1.5)
-                if connect_to_server():
-                    continue
-                else:
-                    print("\n[!] Exhausted all servers. Press Enter to exit.")
-                    break
-                    
-            continue
-            
-        print_board(state)
-        
-        if state['state'] != 'playing':
-            print(f"> Game Over! You {state['state']}.")
-            print("> Enter 'restart' to play again or 'q' to quit.")
-
-def start_client():
-    if not connect_to_server():
-        sys.exit()
-    
-    # Iniciar hilo de escucha en modo 'daemon' para que se cierre al terminar la app principal
-    listener_thread = threading.Thread(target=receive_updates)
-    listener_thread.daemon = True
-    listener_thread.start()
-        
-    while True:
-        try:
-            # El hilo de main queda única y exclusivamente a expensas del input del user.
-            cmd_line = input()
-        except (EOFError, KeyboardInterrupt):
-            break
-            
-        if not conn_state.connected:
-            continue
-            
-        cmd = cmd_line.strip().split()
-        if not cmd:
-            continue
-            
-        command_type = cmd[0].lower()
-        
-        if command_type == 'q':
-            break
-        elif command_type == 'restart':
-            with conn_state.lock:
-                sock = conn_state.sock
-            if not send_message(sock, {'action': 'restart'}):
-                print("Failed to send message.")
-            continue
-            
-        action = ''
-        if command_type == 'r':
-            action = 'reveal'
-        elif command_type == 'f':
-            action = 'flag'
-        else:
-            print("Unknown command. Use 'r row col' or 'f row col', 'restart' or 'q'.")
-            continue
-            
-        if len(cmd) < 3:
-            print("Please provide row and col coordinates (e.g. 'r 2 3')")
-            continue
-            
-        try:
-            r = int(cmd[1])
-            c = int(cmd[2])
-        except ValueError:
-            print("Coordinates must be integers.")
-            continue
-            
-        msg = {'action': action, 'r': r, 'c': c}
-        
-        with conn_state.lock:
-            sock = conn_state.sock
-            
-        if not send_message(sock, msg):
-            print("Failed to send message.")
-            
-    try:
-        with conn_state.lock:
-            if conn_state.sock:
-                conn_state.sock.close()
-    except Exception:
-        pass
 
 if __name__ == "__main__":
     app = MinesweeperGUI()
