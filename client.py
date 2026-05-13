@@ -2,9 +2,9 @@ import os
 import socket
 import threading
 import time
-import sys
 from protocol import receive_message
 from gui import MinesweeperGUI
+from controller import MinesweeperController
 
 LEADER_HOST = os.environ.get('LEADER_HOST', 'localhost')
 LEADER_PORT = int(os.environ.get('LEADER_PORT', 5000))
@@ -19,12 +19,14 @@ NODES = [
     (SLAVE_2_HOST, SLAVE_2_PORT)
 ]
 
+
 class ConnectionState:
     def __init__(self):
         self.sock = None
         self.connected = False
-        self.port_index = 0             #index of node trying to connect to
-        self.lock = threading.Lock()    #mutex
+        self.port_index = 0             # index of node trying to connect to
+        self.lock = threading.Lock()    # mutex
+
 
 conn_state = ConnectionState()
 
@@ -96,6 +98,23 @@ def receive_updates(gui):
         gui.after(0, lambda s=state: gui.update_board(s))
 
 
-if __name__ == "__main__":
-    app = MinesweeperGUI(conn_state, connect_to_server, receive_updates)
+def main():
+    controller = MinesweeperController(conn_state)
+    app = MinesweeperGUI(controller)
+    controller.set_view(app)
+
+    if not connect_to_server():
+        app.show_error("Could not connect to server")
+        app.quit()
+        app.destroy()
+        return
+
+    listener_thread = threading.Thread(target=receive_updates, args=(app,))
+    listener_thread.daemon = True
+    listener_thread.start()
+
     app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
