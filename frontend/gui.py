@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import ttk
 
 # Handles the Minesweeper graphical interface and renders the game
 class MinesweeperGUI(tk.Tk):
@@ -34,13 +35,18 @@ class MinesweeperGUI(tk.Tk):
         self.username_entry.pack(pady=5)
 
         tk.Label(self.login_frame, text="Room Name:", font=("Courier", 14), fg="white", bg="#0a0a0a").pack(pady=5)
-        self.room_entry = tk.Entry(self.login_frame, font=("Courier", 14))
+        self.room_var = tk.StringVar()
+        self.room_entry = ttk.Combobox(self.login_frame, textvariable=self.room_var, font=("Courier", 14))
         self.room_entry.pack(pady=5)
 
         join_btn = tk.Button(self.login_frame, text="Join / Create", font=("Courier", 14, "bold"), 
                              bg="#00e5ff", fg="black", activebackground="#69ff47", 
                              command=self.submit_login)
         join_btn.pack(pady=20)
+
+    def update_room_list(self, rooms):
+        if hasattr(self, 'room_entry') and self.room_entry.winfo_exists():
+            self.room_entry['values'] = rooms
 
     def submit_login(self):
         username = self.username_entry.get().strip() or "Anonymous"

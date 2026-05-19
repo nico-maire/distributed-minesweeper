@@ -100,6 +100,9 @@ def receive_updates(gui):
         room_name = gui.controller.room_name  # Check what room user is in now
         if msg_type == 'init_rooms':
             rooms = msg.get('rooms', {})
+            room_names = list(rooms.keys())
+            gui.after(0, lambda r=room_names: gui.update_room_list(r))
+            
             state = rooms.get(room_name)
             if state:
                 gui.after(0, lambda s=state: gui.update_board(s))
