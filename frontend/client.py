@@ -63,7 +63,7 @@ def connect_to_server():
         return False
 
 
-def receive_updates(gui, room_name):
+def receive_updates(gui):
     while True:
         with conn_state.lock:
             sock = conn_state.sock
@@ -97,6 +97,7 @@ def receive_updates(gui, room_name):
             continue
             
         msg_type = msg.get('type')
+        room_name = gui.controller.room_name  # Check what room user is in now
         if msg_type == 'init_rooms':
             rooms = msg.get('rooms', {})
             state = rooms.get(room_name)
@@ -106,22 +107,15 @@ def receive_updates(gui, room_name):
             if msg.get('room') == room_name:
                 state = msg.get('state')
                 gui.after(0, lambda s=state: gui.update_board(s))
+        elif msg_type == 'update_users':
+            if msg.get('room') == room_name:
+                users = msg.get('users', [])
+                gui.after(0, lambda u=users: gui.update_user_list(u))
 
-
-import tkinter as tk
-from tkinter import simpledialog
 
 def main():
-    root = tk.Tk()
-    root.withdraw()
-    room_name = simpledialog.askstring("Room Selection", "Enter the room name to join:")
-    if not room_name:
-        room_name = "default"
-    root.destroy()
-    
-    controller = MinesweeperController(conn_state, room_name)
+    controller = MinesweeperController(conn_state)
     app = MinesweeperGUI(controller)
-    app.title(f"Distributed Minesweeper - Sala: {room_name}")
     controller.set_view(app)
 
     if not connect_to_server():
@@ -130,7 +124,7 @@ def main():
         app.destroy()
         return
 
-    listener_thread = threading.Thread(target=receive_updates, args=(app, room_name))
+    listener_thread = threading.Thread(target=receive_updates, args=(app,))
     listener_thread.daemon = True
     listener_thread.start()
 

@@ -19,13 +19,54 @@ class MinesweeperGUI(tk.Tk):
         self.started = False
         self.timer_id = None
         self.cells = []
-        self.create_widgets()
+        
+        self.create_login_frame()
 
-    def create_widgets(self):
-        self.title_label = tk.Label(self, text="◈ MINESWEEPER ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
+    def create_login_frame(self):
+        self.login_frame = tk.Frame(self, bg="#0a0a0a")
+        self.login_frame.pack(expand=True, fill=tk.BOTH, padx=50, pady=50)
+
+        title = tk.Label(self.login_frame, text="◈ MINESWEEPER ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
+        title.pack(pady=20)
+
+        tk.Label(self.login_frame, text="Username:", font=("Courier", 14), fg="white", bg="#0a0a0a").pack(pady=5)
+        self.username_entry = tk.Entry(self.login_frame, font=("Courier", 14))
+        self.username_entry.pack(pady=5)
+
+        tk.Label(self.login_frame, text="Room Name:", font=("Courier", 14), fg="white", bg="#0a0a0a").pack(pady=5)
+        self.room_entry = tk.Entry(self.login_frame, font=("Courier", 14))
+        self.room_entry.pack(pady=5)
+
+        join_btn = tk.Button(self.login_frame, text="Join / Create", font=("Courier", 14, "bold"), 
+                             bg="#00e5ff", fg="black", activebackground="#69ff47", 
+                             command=self.submit_login)
+        join_btn.pack(pady=20)
+
+    def submit_login(self):
+        username = self.username_entry.get().strip() or "Anonymous"
+        room = self.room_entry.get().strip() or "default"
+        
+        self.login_frame.pack_forget()
+        self.controller.join_room(username, room)
+        self.create_game_widgets()
+        self.title(f"Distributed Minesweeper - Room: {room} - User: {username}")
+
+    def create_game_widgets(self):
+        self.game_frame = tk.Frame(self, bg="#0a0a0a")
+        self.game_frame.pack(expand=True, fill=tk.BOTH)
+
+        # División principal
+        self.left_frame = tk.Frame(self.game_frame, bg="#0a0a0a")
+        self.left_frame.pack(side=tk.LEFT, padx=10, pady=10)
+
+        self.right_frame = tk.Frame(self.game_frame, bg="#111", bd=2, relief="sunken")
+        self.right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+
+        # Panel izquierdo (juego original)
+        self.title_label = tk.Label(self.left_frame, text="◈ MINESWEEPER ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
         self.title_label.pack(pady=10)
 
-        self.panel = tk.Frame(self, bg="#111")
+        self.panel = tk.Frame(self.left_frame, bg="#111")
         self.panel.pack(pady=10)
         self.mine_label = tk.Label(self.panel, text="Mines: 0", font=("Courier", 16), fg="#ff6b6b", bg="#111")
         self.mine_label.pack(side=tk.LEFT, padx=20)
@@ -34,11 +75,22 @@ class MinesweeperGUI(tk.Tk):
         self.time_label = tk.Label(self.panel, text="Time: 000", font=("Courier", 16), fg="#69ff47", bg="#111")
         self.time_label.pack(side=tk.LEFT, padx=20)
 
-        self.grid_frame = tk.Frame(self, bg="#0a0a0a")
+        self.grid_frame = tk.Frame(self.left_frame, bg="#0a0a0a")
         self.grid_frame.pack()
 
-        self.status_label = tk.Label(self, text="Click left to reveal, right to flag", font=("Courier", 10), fg="#00e5ff", bg="#0a0a0a")
+        self.status_label = tk.Label(self.left_frame, text="Click left to reveal, right to flag", font=("Courier", 10), fg="#00e5ff", bg="#0a0a0a")
         self.status_label.pack(pady=5)
+        
+        # Panel derecho (usuarios)
+        tk.Label(self.right_frame, text="Jugadores en sala", font=("Courier", 12, "bold"), fg="#00e5ff", bg="#111").pack(pady=10)
+        self.users_listbox = tk.Listbox(self.right_frame, font=("Courier", 12), bg="#0a0a0a", fg="white", selectbackground="#16213e")
+        self.users_listbox.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
+
+    def update_user_list(self, users):
+        if hasattr(self, 'users_listbox'):
+            self.users_listbox.delete(0, tk.END)
+            for user in users:
+                self.users_listbox.insert(tk.END, user)
 
     def create_grid(self, rows, cols):
         self.rows = rows
