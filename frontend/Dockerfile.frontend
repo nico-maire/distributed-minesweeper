@@ -1,0 +1,17 @@
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1
+
+# Instalar los paquetes necesarios para lanzar la GUI con Tkinter
+RUN apt-get update && apt-get install -y \
+    python3-tk \
+    tk-dev \
+    x11-apps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copia los archivos del frontend al contenedor
+COPY . /app/
+
+CMD ["python", "-u", "client.py"]

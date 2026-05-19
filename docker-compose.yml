@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   leader:
-    build: .
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.backend
     command: python -u server.py
     ports:
       - "5000:5000"
@@ -13,7 +15,9 @@ services:
       - minesweeper-net
 
   follower-1:
-    build: .
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.backend
     command: python -u slave.py
     ports:
       - "6000:6000"
@@ -24,12 +28,27 @@ services:
       - minesweeper-net
 
   follower-2:
-    build: .
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.backend
     command: python -u slave.py
     ports:
       - "7000:7000"
     environment:
       - PORT=7000
+    networks:
+      - minesweeper-net
+
+  client:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    depends_on:
+      - leader
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
     networks:
       - minesweeper-net
 
