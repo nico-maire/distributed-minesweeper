@@ -2,8 +2,9 @@ from protocol import send_message
 
 # Translates user interactions into game commands and sends them to the active server.
 class MinesweeperController:
-    def __init__(self, conn_state):
+    def __init__(self, conn_state, room_name="default"):
         self.conn_state = conn_state
+        self.room_name = room_name
         self.view = None
 
     def set_view(self, view):
@@ -28,6 +29,7 @@ class MinesweeperController:
             self.view.reset_timer()
 
     def _send_to_server(self, message):
+        message['room'] = self.room_name
         with self.conn_state.lock:
             sock = self.conn_state.sock
         if sock:

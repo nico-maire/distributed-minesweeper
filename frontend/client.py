@@ -63,15 +63,15 @@ def connect_to_server():
         return False
 
 
-def receive_updates(gui):
+def receive_updates(gui, room_name):
     while True:
         with conn_state.lock:
             sock = conn_state.sock
         if not conn_state.connected or not sock:
             time.sleep(0.5)
             continue
-        state = receive_message(sock)
-        if not state:
+        msg = receive_message(sock)
+        if not msg:
             needs_reconnect = False
             exhausted = False
             with conn_state.lock:
@@ -95,12 +95,33 @@ def receive_updates(gui):
                     gui.after(0, gui.quit)
                     break
             continue
-        gui.after(0, lambda s=state: gui.update_board(s))
+            
+        msg_type = msg.get('type')
+        if msg_type == 'init_rooms':
+            rooms = msg.get('rooms', {})
+            state = rooms.get(room_name)
+            if state:
+                gui.after(0, lambda s=state: gui.update_board(s))
+        elif msg_type == 'update_room':
+            if msg.get('room') == room_name:
+                state = msg.get('state')
+                gui.after(0, lambda s=state: gui.update_board(s))
 
+
+import tkinter as tk
+from tkinter import simpledialog
 
 def main():
-    controller = MinesweeperController(conn_state)
+    root = tk.Tk()
+    root.withdraw()
+    room_name = simpledialog.askstring("Room Selection", "Enter the room name to join:")
+    if not room_name:
+        room_name = "default"
+    root.destroy()
+    
+    controller = MinesweeperController(conn_state, room_name)
     app = MinesweeperGUI(controller)
+    app.title(f"Distributed Minesweeper - Sala: {room_name}")
     controller.set_view(app)
 
     if not connect_to_server():
@@ -109,7 +130,7 @@ def main():
         app.destroy()
         return
 
-    listener_thread = threading.Thread(target=receive_updates, args=(app,))
+    listener_thread = threading.Thread(target=receive_updates, args=(app, room_name))
     listener_thread.daemon = True
     listener_thread.start()
 
