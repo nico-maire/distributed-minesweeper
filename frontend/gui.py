@@ -9,6 +9,8 @@ class MinesweeperGUI(tk.Tk):
     def __init__(self, controller):
         super().__init__()
         self.title("Distributed Minesweeper")
+        self.geometry('950x650')
+        self.minsize(800, 500)
         self.config(bg="#0a0a0a")
         self.controller = controller
         self.rows = 0
@@ -25,7 +27,7 @@ class MinesweeperGUI(tk.Tk):
 
     def create_login_frame(self):
         self.login_frame = tk.Frame(self, bg="#0a0a0a")
-        self.login_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.login_frame.pack(expand=True)
 
         title = tk.Label(self.login_frame, text="◈ MINESWEEPER ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
         title.pack(pady=20)
@@ -58,18 +60,18 @@ class MinesweeperGUI(tk.Tk):
             messagebox.showerror('Error', 'Debes introducir un usuario y una sala')
             return
         
-        self.login_frame.place_forget()
+        self.login_frame.pack_forget()
         self.controller.join_game(username, room)
         self.create_game_widgets()
         self.title(f"Distributed Minesweeper - Room: {room} - User: {username}")
 
     def create_game_widgets(self):
         self.game_frame = tk.Frame(self, bg="#0a0a0a")
-        self.game_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.game_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
 
         # División principal
         self.left_frame = tk.Frame(self.game_frame, bg="#0a0a0a")
-        self.left_frame.pack(side=tk.LEFT, padx=10, pady=10)
+        self.left_frame.pack(side=tk.LEFT, expand=True, padx=10, pady=10)
 
         self.right_frame = tk.Frame(self.game_frame, bg="#111", bd=2, relief="sunken")
         self.right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
