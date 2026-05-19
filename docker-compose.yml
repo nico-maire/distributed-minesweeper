@@ -39,19 +39,6 @@ services:
     networks:
       - minesweeper-net
 
-  client:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.frontend
-    depends_on:
-      - leader
-    environment:
-      - DISPLAY=${DISPLAY}
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
-    networks:
-      - minesweeper-net
-
 networks:
   minesweeper-net:
     driver: bridge
