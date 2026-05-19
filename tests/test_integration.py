@@ -7,11 +7,27 @@ import sys
 
 # Rutas absolutas a los archivos del backend
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKEND_DIR = os.path.join(BASE_DIR, "backend")
 SERVER_PY = os.path.join(BASE_DIR, "backend", "server.py")
 SLAVE_PY = os.path.join(BASE_DIR, "backend", "slave.py")
 
 class TestLeaderElectionAndRecovery(unittest.TestCase):
     def setUp(self):
+        # Configuramos variables de entorno para el seguidor (esclavo)
+        slave_env = os.environ.copy()
+        slave_env["PORT"] = "6000"
+        
+        # Iniciar el proceso del Seguidor (Puerto 6000)
+        self.slave_process = subprocess.Popen(
+            [sys.executable, SLAVE_PY],
+            env=slave_env,
+            cwd=BACKEND_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+        time.sleep(1)
+
         # Configuramos variables de entorno para el líder
         leader_env = os.environ.copy()
         leader_env["SLAVE_HOST"] = "127.0.0.1"
@@ -21,18 +37,7 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
         self.leader_process = subprocess.Popen(
             [sys.executable, SERVER_PY],
             env=leader_env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-
-        # Configuramos variables de entorno para el seguidor (esclavo)
-        slave_env = os.environ.copy()
-        slave_env["PORT"] = "6000"
-        
-        # Iniciar el proceso del Seguidor (Puerto 6000)
-        self.slave_process = subprocess.Popen(
-            [sys.executable, SLAVE_PY],
-            env=slave_env,
+            cwd=BACKEND_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
@@ -55,16 +60,24 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
         Simula una conexión a un líder, lo apaga abruptamente y verifica
         que el cliente pueda conectarse al esclavo ascendido a líder.
         """
-        # 1. Conexión dummy inicial con el Líder
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.settimeout(5.0)
-        try:
-            client_socket.connect(("127.0.0.1", 5000))
-            self.assertTrue(True, "El cliente se conectó al líder con éxito.")
-        except Exception as e:
-            self.fail(f"No se pudo conectar al líder original: {e}")
-        finally:
-            client_socket.close()
+        # 1. Conexión dummy inicial con el Líder con reintentos
+        connected = False
+        for attempt in range(10):
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.settimeout(2.0)
+            try:
+                client_socket.connect(("127.0.0.1", 5000))
+                connected = True
+                client_socket.close()
+                break
+            except Exception:
+                client_socket.close()
+                time.sleep(1)
+                
+        if not connected:
+            self.leader_process.poll()
+            stderr_output = self.leader_process.stderr.read().decode('utf-8', errors='ignore')
+            self.fail(f"No se pudo conectar al líder original tras 10 intentos. Stderr del líder:\n{stderr_output}")
 
         # 2. Provocar un fallo: matar el líder
         print("\n[TEST] Matando al líder para forzar elección...")
