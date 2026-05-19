@@ -47,7 +47,7 @@ class MinesweeperGUI(tk.Tk):
         room = self.room_entry.get().strip() or "default"
         
         self.login_frame.pack_forget()
-        self.controller.join_room(username, room)
+        self.controller.join_game(username, room)
         self.create_game_widgets()
         self.title(f"Distributed Minesweeper - Room: {room} - User: {username}")
 

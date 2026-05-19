@@ -113,11 +113,7 @@ def receive_updates(gui):
                 gui.after(0, lambda u=users: gui.update_user_list(u))
 
 
-def main():
-    controller = MinesweeperController(conn_state)
-    app = MinesweeperGUI(controller)
-    controller.set_view(app)
-
+def start_network(app):
     if not connect_to_server():
         app.show_error("Could not connect to server")
         app.quit()
@@ -127,6 +123,13 @@ def main():
     listener_thread = threading.Thread(target=receive_updates, args=(app,))
     listener_thread.daemon = True
     listener_thread.start()
+
+
+def main():
+    controller = MinesweeperController(conn_state)
+    app = MinesweeperGUI(controller)
+    controller.start_network_cb = lambda: start_network(app)
+    controller.set_view(app)
 
     app.mainloop()
 

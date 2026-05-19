@@ -7,13 +7,16 @@ class MinesweeperController:
         self.room_name = "default"
         self.username = "Anonymous"
         self.view = None
+        self.start_network_cb = None
 
     def set_view(self, view):
         self.view = view
         
-    def join_room(self, username, room_name):
+    def join_game(self, username, room_name):
         self.username = username
         self.room_name = room_name
+        if self.start_network_cb:
+            self.start_network_cb()
         self._send_to_server({'action': 'join', 'username': self.username})
 
     def reveal_cell(self, r, c):
