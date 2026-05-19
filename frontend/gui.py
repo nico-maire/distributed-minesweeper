@@ -47,10 +47,16 @@ class MinesweeperGUI(tk.Tk):
     def update_room_list(self, rooms):
         if hasattr(self, 'room_entry') and self.room_entry.winfo_exists():
             self.room_entry['values'] = rooms
+            if rooms and not self.room_entry.get():
+                self.room_entry.set(rooms[0])
 
     def submit_login(self):
-        username = self.username_entry.get().strip() or "Anonymous"
-        room = self.room_entry.get().strip() or "default"
+        username = self.username_entry.get().strip()
+        room = self.room_entry.get().strip()
+        
+        if not username or not room:
+            messagebox.showerror('Error', 'Debes introducir un usuario y una sala')
+            return
         
         self.login_frame.pack_forget()
         self.controller.join_game(username, room)
@@ -69,7 +75,7 @@ class MinesweeperGUI(tk.Tk):
         self.right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
 
         # Panel izquierdo (juego original)
-        self.title_label = tk.Label(self.left_frame, text="◈ MINESWEEPER ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
+        self.title_label = tk.Label(self.left_frame, text=f"◈ MINESWEEPER - {self.controller.room_name} ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
         self.title_label.pack(pady=10)
 
         self.panel = tk.Frame(self.left_frame, bg="#111")
