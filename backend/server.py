@@ -69,6 +69,12 @@ def handle_client(client_socket, address):
                     except Exception:
                         pass
                 broadcast(update_msg)
+                
+                game = get_or_create_game(room)
+                with games_lock:
+                    current_state = game.to_dict()
+                send_message(client_socket, {'type': 'update_room', 'room': room, 'state': current_state})
+                
                 continue
             
             r = msg.get('r', 0)

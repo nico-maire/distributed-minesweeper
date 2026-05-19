@@ -61,6 +61,14 @@ def handle_client(client_socket, address, next_replica_socket=None):
                     except Exception:
                         pass
                 broadcast(update_msg)
+                
+                with games_lock:
+                    if room not in games:
+                        games[room] = Minesweeper(10, 10, 10)
+                    game = games[room]
+                    current_state = game.to_dict()
+                send_message(client_socket, {'type': 'update_room', 'room': room, 'state': current_state})
+                
                 continue
                 
             r = msg.get('r', 0)
