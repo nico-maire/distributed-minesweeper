@@ -118,14 +118,13 @@ def receive_updates(gui):
 
 def main():
     controller = MinesweeperController(conn_state)
-    app = MinesweeperGUI(controller)
-    controller.set_view(app)
     
     if not connect_to_server():
-        app.show_error("Could not connect to server")
-        app.quit()
-        app.destroy()
+        print("[!] No servers available")
         return
+
+    app = MinesweeperGUI(controller)
+    controller.set_view(app)
 
     listener_thread = threading.Thread(target=receive_updates, args=(app,))
     listener_thread.daemon = True
