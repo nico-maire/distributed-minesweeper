@@ -37,9 +37,15 @@ class MinesweeperGUI(tk.Tk):
         self.username_entry.pack(pady=5)
 
         tk.Label(self.login_frame, text="Room Name:", font=("Courier", 14), fg="white", bg="#0a0a0a").pack(pady=5)
+        
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure('TCombobox', fieldbackground='#111111', background='#00e5ff', foreground='white', arrowcolor='black')
+
         self.room_var = tk.StringVar()
-        self.room_entry = ttk.Combobox(self.login_frame, textvariable=self.room_var, font=("Courier", 14))
+        self.room_entry = ttk.Combobox(self.login_frame, textvariable=self.room_var, font=("Courier", 14), width=22)
         self.room_entry.pack(pady=5)
+        self.room_entry.set('Escribe o selecciona...')
 
         join_btn = tk.Button(self.login_frame, text="Join / Create", font=("Courier", 14, "bold"), 
                              bg="#00e5ff", fg="black", activebackground="#69ff47", 
@@ -49,14 +55,14 @@ class MinesweeperGUI(tk.Tk):
     def update_room_list(self, rooms):
         if hasattr(self, 'room_entry') and self.room_entry.winfo_exists():
             self.room_entry['values'] = rooms
-            if rooms and not self.room_entry.get():
+            if rooms and (not self.room_entry.get() or self.room_entry.get() == 'Escribe o selecciona...'):
                 self.room_entry.set(rooms[0])
 
     def submit_login(self):
         username = self.username_entry.get().strip()
         room = self.room_entry.get().strip()
         
-        if not username or not room:
+        if not username or not room or room == 'Escribe o selecciona...':
             messagebox.showerror('Error', 'Debes introducir un usuario y una sala')
             return
         
