@@ -55,6 +55,16 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
         self.leader_process.wait()
         self.slave_process.wait()
 
+        # Cerrar explícitamente los pipes para evitar ResourceWarning
+        if self.leader_process.stdout:
+            self.leader_process.stdout.close()
+        if self.leader_process.stderr:
+            self.leader_process.stderr.close()
+        if self.slave_process.stdout:
+            self.slave_process.stdout.close()
+        if self.slave_process.stderr:
+            self.slave_process.stderr.close()
+
     def test_failure_recovery_and_reconnection(self):
         """
         Simula una conexión a un líder, lo apaga abruptamente y verifica
