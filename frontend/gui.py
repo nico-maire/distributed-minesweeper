@@ -65,7 +65,7 @@ class MinesweeperGUI(tk.Tk):
 
     def create_game_widgets(self):
         self.game_frame = tk.Frame(self, bg="#0a0a0a")
-        self.game_frame.pack(expand=True, fill=tk.BOTH)
+        self.game_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
         # División principal
         self.left_frame = tk.Frame(self.game_frame, bg="#0a0a0a")
