@@ -8,7 +8,7 @@ from protocol import send_message, receive_message
 
 clients = []
 slave_socket = None
-games = {}  # Diccionario global de salas
+games = {}  # Global dictionary for rooms
 games_lock = threading.Lock()
 room_users = {}
 users_lock = threading.Lock()
@@ -16,7 +16,7 @@ users_lock = threading.Lock()
 def get_or_create_game(room):
     with games_lock:
         if room not in games:
-            # Crear nueva partida
+            # Create new game
             games[room] = Minesweeper(10, 10, 10)
         return games[room]
 

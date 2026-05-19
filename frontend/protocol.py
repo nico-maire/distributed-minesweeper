@@ -4,58 +4,58 @@ import socket
 
 def send_message(sock, message_dict):
     """
-    Convierte un diccionario a JSON, lo codifica en UTF-8 y lo envía a través del socket
-    empaquetando un prefijo inicial de 4 bytes que indica la longitud del mensaje.
+    Converts a dictionary to JSON, encodes it to UTF-8 and sends it over the socket
+    packing a 4-byte prefix indicating the message length.
     """
     try:
-        # Convertir a JSON y codificar
+        # Convert to JSON and encode
         data = json.dumps(message_dict).encode('utf-8')
         
-        # Empaquetar la longitud como un entero sin signo de 4 bytes en formato 'network byte order' (big-endian)
+        # Pack the length as a 4-byte unsigned integer in 'network byte order' (big-endian)
         length_prefix = struct.pack('!I', len(data))
         
-        # Enviar todo
+        # Send everything
         sock.sendall(length_prefix + data)
         return True
     except (socket.error, Exception) as e:
-        print(f"Error al enviar mensaje: {e}")
+        print(f"Error sending message: {e}")
         return False
 
 def receive_message(sock):
     """
-    Lee un prefijo de 4 bytes para saber la longitud, luego lee el resto del mensaje,
-    lo decodifica de UTF-8 y parsea el JSON al diccionario original.
+    Reads a 4-byte prefix to know the length, then reads the rest of the message,
+    decodes it from UTF-8 and parses the JSON to the original dictionary.
     """
     try:
-        # Leer los 4 bytes de encabezado
+        # Read the 4 header bytes
         raw_msglen = _recvall(sock, 4)
         if not raw_msglen:
             return None
         
-        # Desempaquetar la longitud
+        # Unpack the length
         msglen = struct.unpack('!I', raw_msglen)[0]
         
-        # Leer la longitud esperada de los datos JSON
+        # Read the expected length of JSON data
         msg_data = _recvall(sock, msglen)
         if not msg_data:
             return None
         
-        # Decodificar el JSON y reconstruir el diccionario
+        # Decode JSON and reconstruct the dictionary
         return json.loads(msg_data.decode('utf-8'))
     except (socket.error, struct.error, json.JSONDecodeError, Exception) as e:
-        print(f"Error al recibir mensaje: {e}")
+        print(f"Error receiving message: {e}")
         return None
 
 def _recvall(sock, n):
     """
-    Función de ayuda para leer exactamente 'n' bytes desde el socket.
-    Esencial para TCP porque recv() no garantiza leer la cantidad requerida de una vez.
+    Helper function to read exactly 'n' bytes from the socket.
+    Essential for TCP because recv() does not guarantee reading the required amount at once.
     """
     data = bytearray()
     while len(data) < n:
         packet = sock.recv(n - len(data))
         if not packet:
-            # Se ha cerrado la conexión desde el otro lado
+            # Connection closed from the other side
             return None
         data.extend(packet)
     return data

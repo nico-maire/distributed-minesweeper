@@ -152,7 +152,7 @@ def start_slave(host=HOST, port=PORT):
             if not data:
                 break
             
-            # Formato Data -> {'type': 'update_room', 'type': 'init_rooms', 'type': 'update_users'}
+            # Format Data -> {'type': 'update_room', 'type': 'init_rooms', 'type': 'update_users'}
             msg_type = data.get('type')
             
             with games_lock:

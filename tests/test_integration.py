@@ -13,11 +13,11 @@ SLAVE_PY = os.path.join(BASE_DIR, "backend", "slave.py")
 
 class TestLeaderElectionAndRecovery(unittest.TestCase):
     def setUp(self):
-        # Configuramos variables de entorno para el seguidor (esclavo)
+        # Configure environment variables for the follower (slave)
         slave_env = os.environ.copy()
         slave_env["PORT"] = "6000"
         
-        # Iniciar el proceso del Seguidor (Puerto 6000)
+        # Start the Follower process (Port 6000)
         self.slave_process = subprocess.Popen(
             [sys.executable, SLAVE_PY],
             env=slave_env,
@@ -28,12 +28,12 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
 
         time.sleep(1)
 
-        # Configuramos variables de entorno para el líder
+        # Configure environment variables for the leader
         leader_env = os.environ.copy()
         leader_env["SLAVE_HOST"] = "127.0.0.1"
         leader_env["SLAVE_PORT"] = "6000"
 
-        # Iniciar el proceso del Líder (Puerto 5000 por defecto)
+        # Start the Leader process (Port 5000 by default)
         self.leader_process = subprocess.Popen(
             [sys.executable, SERVER_PY],
             env=leader_env,
@@ -42,11 +42,11 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
             stderr=subprocess.PIPE
         )
 
-        # Esperar a que los procesos levanten correctamente sus sockets
+        # Wait for the processes to setup their sockets correctly
         time.sleep(3)
 
     def tearDown(self):
-        # Asegurarnos de limpiar y matar procesos colgados
+        # Ensure cleanup and kill hung processes
         if self.leader_process.poll() is None:
             self.leader_process.terminate()
         if self.slave_process.poll() is None:
@@ -55,7 +55,7 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
         self.leader_process.wait()
         self.slave_process.wait()
 
-        # Cerrar explícitamente los pipes para evitar ResourceWarning
+        # Explicitly close pipes to avoid ResourceWarning
         if self.leader_process.stdout:
             self.leader_process.stdout.close()
         if self.leader_process.stderr:
@@ -67,10 +67,10 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
 
     def test_failure_recovery_and_reconnection(self):
         """
-        Simula una conexión a un líder, lo apaga abruptamente y verifica
-        que el cliente pueda conectarse al esclavo ascendido a líder.
+        Simulates a connection to a leader, turns it off abruptly and verifies
+        that the client can connect to the slave promoted to leader.
         """
-        # 1. Conexión dummy inicial con el Líder con reintentos
+        # 1. Initial dummy connection with the Leader with retries
         connected = False
         for attempt in range(10):
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -87,32 +87,32 @@ class TestLeaderElectionAndRecovery(unittest.TestCase):
         if not connected:
             self.leader_process.poll()
             stderr_output = self.leader_process.stderr.read().decode('utf-8', errors='ignore')
-            self.fail(f"No se pudo conectar al líder original tras 10 intentos. Stderr del líder:\n{stderr_output}")
+            self.fail(f"Could not connect to the original leader after 10 retries. Leader stderr:\n{stderr_output}")
 
-        # 2. Provocar un fallo: matar el líder
-        print("\n[TEST] Matando al líder para forzar elección...")
+        # 2. Trigger a failure: kill the leader
+        print("\n[TEST] Killing leader to force election...")
         self.leader_process.terminate()
         self.leader_process.wait()
 
-        # Esperamos a que el sistema distribuido detecte la caída (ajusta según el timeout del ping en tu código)
+        # Wait for the distributed system to detect the crash (adjust according to the ping timeout in your code)
         time.sleep(3)
 
-        # 3. Intentar reconexión al siguiente nodo disponible (nuevo líder en puerto 6000)
+        # 3. Try reconnection to the next available node (new leader on port 6000)
         reconnected = False
-        print("[TEST] Intentando reconectar cliente al nuevo líder (puerto 6000)...")
+        print("[TEST] Attempting to reconnect client to the new leader (port 6000)...")
         for attempt in range(5):
             client_socket_retry = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_socket_retry.settimeout(3.0)
             try:
                 client_socket_retry.connect(("127.0.0.1", 6000))
                 reconnected = True
-                print(f"[TEST] Reconexión exitosa en el intento {attempt + 1}")
+                print(f"[TEST] Successful reconnection on attempt {attempt + 1}")
                 client_socket_retry.close()
                 break
             except Exception:
                 time.sleep(1)
 
-        self.assertTrue(reconnected, "El cliente no pudo reconectarse al nuevo líder tras la caída del original. Falló la recuperación.")
+        self.assertTrue(reconnected, "Client could not reconnect to the new leader after the original crashed. Recovery failed.")
 
 if __name__ == '__main__':
     unittest.main()
