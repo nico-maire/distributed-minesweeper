@@ -8,45 +8,51 @@ from protocol import send_message, receive_message
 
 clients = []
 slave_socket = None
+games = {}  # Diccionario global de salas
+games_lock = threading.Lock()
 
-def broadcast(state_dict):
-    """Envía el nuevo estado del juego a todos los clientes conectados."""
+def get_or_create_game(room):
+    with games_lock:
+        if room not in games:
+            # Crear nueva partida
+            games[room] = Minesweeper(10, 10, 10)
+        return games[room]
+
+def broadcast(message):
     disconnected = []
     for client_socket in clients:
         try:
-            if not send_message(client_socket, state_dict):
+            if not send_message(client_socket, message):
                 disconnected.append(client_socket)
         except Exception:
             disconnected.append(client_socket)
-            
-    # Limpiar clientes desconectados
     for c in disconnected:
         if c in clients:
             clients.remove(c)
 
-def handle_client(client_socket, address, game, game_lock):
-    print(f"[*] Client connected from {address}")
+def handle_client(client_socket, address):
+    print(f'[*] Client connected from {address}')
     clients.append(client_socket)
     
-    # Enviar estado inicial seguro
-    with game_lock:
-        initial_state = game.to_dict()
-    send_message(client_socket, initial_state)
+    with games_lock:
+        initial_state = {room: game.to_dict() for room, game in games.items()}
+    send_message(client_socket, {'type': 'init_rooms', 'rooms': initial_state})
     
     try:
         while True:
             msg = receive_message(client_socket)
             if not msg:
-                print(f"[*] Client {address} disconnected")
                 break
             
             action = msg.get('action')
+            room = msg.get('room', 'default')
             r = msg.get('r', 0)
             c = msg.get('c', 0)
             
+            game = get_or_create_game(room)
             needs_broadcast = False
             
-            with game_lock:
+            with games_lock:
                 if action == 'reveal':
                     game.reveal(r, c)
                     needs_broadcast = True
@@ -54,21 +60,23 @@ def handle_client(client_socket, address, game, game_lock):
                     game.toggle_flag(r, c)
                     needs_broadcast = True
                 elif action == 'restart':
-                    # Reiniciamos reinvocando __init__ para mantener la misma referencia en la memoria (thread sharing)
-                    game.__init__(10, 10, 10)
+                    game.__init__(game.rows, game.cols, game.num_mines)
                     needs_broadcast = True
                     
                 if needs_broadcast:
                     current_state = game.to_dict()
-                    # Replicación Síncrona: Asegura Consistencia Fuerte enviando primero al esclavo
-                    if not send_message(slave_socket, current_state):
-                        print("[!] Error replicating state to slave.")
+                    update_message = {'type': 'update_room', 'room': room, 'state': current_state}
+                    if slave_socket:
+                        try:
+                            send_message(slave_socket, update_message)
+                        except Exception:
+                            pass
             
             if needs_broadcast:
-                broadcast(current_state)
+                broadcast(update_message)
                 
     except Exception as e:
-        print(f"[*] Client {address} error: {e}")
+        print(e)
     finally:
         if client_socket in clients:
             clients.remove(client_socket)
@@ -76,8 +84,6 @@ def handle_client(client_socket, address, game, game_lock):
 
 def start_server():
     global slave_socket
-    
-    # Lectura segura desde el interior
     HOST = os.environ.get('HOST', '0.0.0.0')
     PORT = int(os.environ.get('PORT', 5000))
     SLAVE_HOST = os.environ.get('SLAVE_HOST', 'localhost')
@@ -87,33 +93,23 @@ def start_server():
     while True:
         try:
             slave_socket.connect((SLAVE_HOST, SLAVE_PORT))
-            print(f"[*] Successfully connected to passive replica at {SLAVE_HOST}:{SLAVE_PORT}")
             break
-        except socket.error as e:
-            print("Esperando a que la réplica (follower) esté lista...")
+        except socket.error:
             time.sleep(2)
 
-    game = Minesweeper(10, 10, 10)
-    game_lock = threading.Lock()
-    
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PORT))
     server_socket.listen(5)
     
-    print(f"[*] Server listening on {HOST}:{PORT} with multi-threading...")
-    
     try:
         while True:
             client_socket, address = server_socket.accept()
-            client_thread = threading.Thread(
-                target=handle_client, 
-                args=(client_socket, address, game, game_lock)
-            )
+            client_thread = threading.Thread(target=handle_client, args=(client_socket, address))
             client_thread.daemon = True
             client_thread.start()
     except KeyboardInterrupt:
-        print("\n[*] Server stopping...")
+        pass
     finally:
         server_socket.close()
 

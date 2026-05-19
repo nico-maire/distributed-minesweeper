@@ -9,48 +9,47 @@ HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get('PORT', 6000))
 
 clients = []
+games = {}
+games_lock = threading.Lock()
 
-def broadcast(state_dict):
-    """Envía el nuevo estado del juego a todos los clientes conectados."""
+def broadcast(message):
     disconnected = []
     for client_socket in clients:
         try:
-            if not send_message(client_socket, state_dict):
+            if not send_message(client_socket, message):
                 disconnected.append(client_socket)
         except Exception:
             disconnected.append(client_socket)
-            
-    # Limpiar clientes desconectados
     for c in disconnected:
         if c in clients:
             clients.remove(c)
 
-def handle_client(client_socket, address, game, game_lock, next_replica_socket=None):
-    print(f"[*] Client connected from {address}")
+def handle_client(client_socket, address, next_replica_socket=None):
     clients.append(client_socket)
     
-    # Regla de oro 1 (Evitar Ceguera):
-    # Enviar estado inicial seguro al cliente reconectado para repintar el tablero.
-    with game_lock:
-        initial_state = game.to_dict()
-    send_message(client_socket, initial_state)
+    with games_lock:
+        initial_state = {room: game.to_dict() for room, game in games.items()}
+    send_message(client_socket, {'type': 'init_rooms', 'rooms': initial_state})
     
     try:
         while True:
             msg = receive_message(client_socket)
             if not msg:
-                print(f"[*] Client {address} disconnected")
                 break
             
             action = msg.get('action')
+            room = msg.get('room', 'default')
             r = msg.get('r', 0)
             c = msg.get('c', 0)
             
+            with games_lock:
+                if room not in games:
+                    games[room] = Minesweeper(10, 10, 10)
+                game = games[room]
+                
             needs_broadcast = False
             
-            # Regla de oro 2 (Último nodo vivo):
-            # Solo actualizar estado local y enviar broadcast a clientes sin replicar a ningún lado.
-            with game_lock:
+            with games_lock:
                 if action == 'reveal':
                     game.reveal(r, c)
                     needs_broadcast = True
@@ -58,23 +57,23 @@ def handle_client(client_socket, address, game, game_lock, next_replica_socket=N
                     game.toggle_flag(r, c)
                     needs_broadcast = True
                 elif action == 'restart':
-                    # Reiniciamos guardando las dimensiones originales del juego transferido.
                     game.__init__(game.rows, game.cols, game.num_mines)
                     needs_broadcast = True
                     
                 if needs_broadcast:
                     current_state = game.to_dict()
+                    update_message = {'type': 'update_room', 'room': room, 'state': current_state}
             
             if needs_broadcast:
-                broadcast(current_state)
+                broadcast(update_message)
                 if next_replica_socket:
                     try:
-                        send_message(next_replica_socket, current_state)
-                    except Exception as e:
-                        print(f"[!] Error forwarding to next replica: {e}")
+                        send_message(next_replica_socket, update_message)
+                    except Exception:
+                        pass
                 
     except Exception as e:
-        print(f"[*] Client {address} error: {e}")
+        print(e)
     finally:
         if client_socket in clients:
             clients.remove(client_socket)
@@ -87,80 +86,63 @@ def start_slave(host=HOST, port=PORT):
     next_replica_socket = None
     if NEXT_REPLICA_HOST and NEXT_REPLICA_PORT:
         NEXT_REPLICA_PORT = int(NEXT_REPLICA_PORT)
-        print(f"[*] Connecting to next replica at {NEXT_REPLICA_HOST}:{NEXT_REPLICA_PORT}...")
         while True:
             try:
                 next_replica_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 next_replica_socket.connect((NEXT_REPLICA_HOST, NEXT_REPLICA_PORT))
-                print("[*] Connected to next replica successfully.")
                 break
-            except socket.error as e:
-                print(f"[*] Connection failed: {e}. Retrying in 2 seconds...")
+            except socket.error:
                 time.sleep(2)
 
-    # Inicializar una instancia dummy de Minesweeper
-    local_replica = Minesweeper(1, 1, 0)
-    
     slave_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     slave_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     slave_socket.bind((host, port))
     slave_socket.listen(1)
     
-    print(f"[*] Slave (Passive Replica) listening on {host}:{port}...")
-    
     leader_socket, address = slave_socket.accept()
-    print(f"[*] Leader connected from {address}")
     
     try:
         while True:
-            # Recibir estado del líder
             data = receive_message(leader_socket)
             if not data:
-                print("[*] Leader disconnected.")
                 break
             
-            # Reconstruir la réplica local usando el método de clase averiado
-            try:
-                local_replica = Minesweeper.from_dict(data)
-                print("[*] Received replica state")
-                if next_replica_socket:
-                    try:
-                        send_message(next_replica_socket, data)
-                    except Exception as e:
-                        print(f"[!] Error forwarding to next replica: {e}")
-            except KeyError as e:
-                print(f"[!] Invalid state format received, missing key: {e}")
-            except Exception as e:
-                print(f"[!] Error reconstructing state: {e}")
+            # Formato Data -> {'type': 'update_room', 'room': 'room1', 'state': {...}}  o init_rooms
+            msg_type = data.get('type')
+            
+            with games_lock:
+                if msg_type == 'update_room':
+                    room = data['room']
+                    state = data['state']
+                    games[room] = Minesweeper.from_dict(state)
+                elif msg_type == 'init_rooms':
+                    for room, state in data['rooms'].items():
+                        games[room] = Minesweeper.from_dict(state)
+            
+            if next_replica_socket:
+                try:
+                    send_message(next_replica_socket, data)
+                except Exception:
+                    pass
                 
-    except socket.error as e:
-        print(f"[!] Connection error: {e}")
+    except Exception as e:
+        print(e)
     finally:
         leader_socket.close()
         
-    print("\n[!] Leader death detected. Promoting to Leader...")
-    
-    # Hemos salido del bucle (fallo detectado). El esclavo se auto-promociona a Líder.
-    # El socket original `slave_socket` escuchaba para 1 conexion del líder,
-    # podríamos cerrarlo y crear otro para clientes, pero como ya lo tenemos bindeado al 6000, 
-    # basta con cambiarle el modo listen para múltiples conexiones.
-    
     slave_socket.listen(5)
-    game_lock = threading.Lock()
-    
-    print(f"[*] New Leader listening for clients on {host}:{port}...")
     
     try:
         while True:
             client_socket, address = slave_socket.accept()
             client_thread = threading.Thread(
                 target=handle_client, 
-                args=(client_socket, address, local_replica, game_lock, next_replica_socket)
+                args=(client_socket, address, next_replica_socket)
             )
             client_thread.daemon = True
             client_thread.start()
     except KeyboardInterrupt:
-        print("\n[*] Promoted Leader stopping...")
+        pass
     finally:
         slave_socket.close()
 
