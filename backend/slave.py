@@ -8,27 +8,35 @@ from protocol import send_message, receive_message
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get('PORT', 6000))
 
-clients = []
+room_clients = {}  # Dict: room -> [socket1, socket2, ...]
+room_clients_lock = threading.Lock()  # Lock for room_clients
 games = {}
 games_lock = threading.Lock()
 room_users = {}
 users_lock = threading.Lock()
 
-def broadcast(message):
-    disconnected = []
-    for client_socket in clients:
-        try:
-            if not send_message(client_socket, message):
+def broadcast_to_room(room, message):
+    """
+    Broadcast a message only to clients in a specific room.
+    Removes disconnected sockets from the room.
+    """
+    with room_clients_lock:
+        if room not in room_clients:
+            return
+        
+        disconnected = []
+        for client_socket in room_clients[room]:
+            try:
+                if not send_message(client_socket, message):
+                    disconnected.append(client_socket)
+            except Exception:
                 disconnected.append(client_socket)
-        except Exception:
-            disconnected.append(client_socket)
-    for c in disconnected:
-        if c in clients:
-            clients.remove(c)
+        
+        for c in disconnected:
+            if c in room_clients[room]:
+                room_clients[room].remove(c)
 
 def handle_client(client_socket, address, next_replica_socket=None):
-    clients.append(client_socket)
-    
     with games_lock:
         initial_state = {room: game.to_dict() for room, game in games.items()}
     send_message(client_socket, {'type': 'init_rooms', 'rooms': initial_state})
@@ -48,6 +56,14 @@ def handle_client(client_socket, address, next_replica_socket=None):
             if action == 'join':
                 client_username = msg.get('username', 'Anonymous')
                 client_room = room
+                
+                # Add client to room
+                with room_clients_lock:
+                    if room not in room_clients:
+                        room_clients[room] = []
+                    if client_socket not in room_clients[room]:
+                        room_clients[room].append(client_socket)
+                
                 with users_lock:
                     if room not in room_users:
                         room_users[room] = []
@@ -60,7 +76,7 @@ def handle_client(client_socket, address, next_replica_socket=None):
                         send_message(next_replica_socket, update_msg)
                     except Exception:
                         pass
-                broadcast(update_msg)
+                broadcast_to_room(room, update_msg)
                 
                 with games_lock:
                     if room not in games:
@@ -97,7 +113,7 @@ def handle_client(client_socket, address, next_replica_socket=None):
                     update_message = {'type': 'update_room', 'room': room, 'state': current_state}
             
             if needs_broadcast:
-                broadcast(update_message)
+                broadcast_to_room(room, update_message)
                 if next_replica_socket:
                     try:
                         send_message(next_replica_socket, update_message)
@@ -107,8 +123,12 @@ def handle_client(client_socket, address, next_replica_socket=None):
     except Exception as e:
         print(e)
     finally:
-        if client_socket in clients:
-            clients.remove(client_socket)
+        # Remove client from room
+        with room_clients_lock:
+            for room_name in list(room_clients.keys()):
+                if client_socket in room_clients[room_name]:
+                    room_clients[room_name].remove(client_socket)
+        
         client_socket.close()
         
         if client_username and client_room:
@@ -122,7 +142,7 @@ def handle_client(client_socket, address, next_replica_socket=None):
                     send_message(next_replica_socket, update_msg)
                 except Exception:
                     pass
-            broadcast(update_msg)
+            broadcast_to_room(client_room, update_msg)
 
 def start_slave(host=HOST, port=PORT):
     NEXT_REPLICA_HOST = os.environ.get('NEXT_REPLICA_HOST')
@@ -152,6 +172,9 @@ def start_slave(host=HOST, port=PORT):
             if not data:
                 break
             
+            # Extract operation ID for ACK protocol
+            op_id = data.get('op_id')
+            
             # Format Data -> {'type': 'update_room', 'type': 'init_rooms', 'type': 'update_users'}
             msg_type = data.get('type')
             
@@ -169,9 +192,20 @@ def start_slave(host=HOST, port=PORT):
                     room = data['room']
                     room_users[room] = data['users']
             
-            if next_replica_socket:
+            # Send ACK back to leader
+            if op_id:
                 try:
-                    send_message(next_replica_socket, data)
+                    ack_msg = {'type': 'ack', 'op_id': op_id}
+                    send_message(leader_socket, ack_msg)
+                except Exception as e:
+                    print(f'[!] Failed to send ACK to leader: {e}')
+            
+            # Forward to next replica (without op_id to avoid confusion)
+            if next_replica_socket and msg_type != 'init_rooms':
+                forward_data = dict(data)
+                forward_data.pop('op_id', None)  # Remove op_id before forwarding
+                try:
+                    send_message(next_replica_socket, forward_data)
                 except Exception:
                     pass
                 

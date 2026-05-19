@@ -89,6 +89,8 @@ def receive_updates(gui):
             if needs_reconnect:
                 time.sleep(1.5)
                 if connect_to_server():
+                    # After successful reconnection, rejoin current room
+                    gui.controller.rejoin()
                     continue
                 else:
                     gui.after(0, lambda: gui.show_error("Exhausted all servers"))

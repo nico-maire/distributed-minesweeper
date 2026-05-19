@@ -7,6 +7,7 @@ class MinesweeperController:
         self.room_name = "default"
         self.username = "Anonymous"
         self.view = None
+        self.joined = False  # Track if user has joined a room
 
     def set_view(self, view):
         self.view = view
@@ -14,7 +15,16 @@ class MinesweeperController:
     def join_game(self, username, room_name):
         self.username = username
         self.room_name = room_name
+        self.joined = True
         self._send_to_server({'action': 'join', 'username': self.username})
+    
+    def rejoin(self):
+        """
+        Re-send join message to server after reconnection.
+        Used during failover to re-establish user session.
+        """
+        if self.joined:
+            self._send_to_server({'action': 'join', 'username': self.username})
 
     def reveal_cell(self, r, c):
         if self.view and self.view.status != "playing":
