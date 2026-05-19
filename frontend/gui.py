@@ -25,7 +25,7 @@ class MinesweeperGUI(tk.Tk):
 
     def create_login_frame(self):
         self.login_frame = tk.Frame(self, bg="#0a0a0a")
-        self.login_frame.pack(expand=True, fill=tk.BOTH, padx=50, pady=50)
+        self.login_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
         title = tk.Label(self.login_frame, text="◈ MINESWEEPER ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
         title.pack(pady=20)
@@ -58,7 +58,7 @@ class MinesweeperGUI(tk.Tk):
             messagebox.showerror('Error', 'Debes introducir un usuario y una sala')
             return
         
-        self.login_frame.pack_forget()
+        self.login_frame.place_forget()
         self.controller.join_game(username, room)
         self.create_game_widgets()
         self.title(f"Distributed Minesweeper - Room: {room} - User: {username}")
