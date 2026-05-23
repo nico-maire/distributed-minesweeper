@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 
-# Handles the Minesweeper graphical interface and renders the game
 class MinesweeperGUI(tk.Tk):
     COUNT_COLORS = ["", "#00e5ff", "#69ff47", "#ff6b6b", "#ffe66d", "#ff9f43", "#fd79a8", "#a29bfe", "#dfe6e9"]
 
@@ -60,7 +59,7 @@ class MinesweeperGUI(tk.Tk):
         room = self.room_entry.get().strip()
         
         if not username or not room:
-            messagebox.showerror('Error', 'You must enter a username and a room')
+            messagebox.showerror('Error', 'Enter a username and room to play.')
             return
         
         self.login_frame.pack_forget()
@@ -72,14 +71,12 @@ class MinesweeperGUI(tk.Tk):
         self.game_frame = tk.Frame(self, bg="#0a0a0a")
         self.game_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
 
-        # Main division
         self.left_frame = tk.Frame(self.game_frame, bg="#0a0a0a")
         self.left_frame.pack(side=tk.LEFT, expand=True, padx=10, pady=10)
 
         self.right_frame = tk.Frame(self.game_frame, bg="#111", bd=2, relief="sunken")
         self.right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
 
-        # Left panel (original game)
         self.title_label = tk.Label(self.left_frame, text=f"◈ MINESWEEPER - {self.controller.room_name} ◈", font=("Courier", 24, "bold"), fg="#00e5ff", bg="#0a0a0a")
         self.title_label.pack(pady=10)
 
@@ -95,10 +92,9 @@ class MinesweeperGUI(tk.Tk):
         self.grid_frame = tk.Frame(self.left_frame, bg="#0a0a0a")
         self.grid_frame.pack()
 
-        self.status_label = tk.Label(self.left_frame, text="Click left to reveal, right to flag", font=("Courier", 10), fg="#00e5ff", bg="#0a0a0a")
+        self.status_label = tk.Label(self.left_frame, text="Left click to reveal • right click to flag", font=("Courier", 10), fg="#00e5ff", bg="#0a0a0a")
         self.status_label.pack(pady=5)
-        
-        # Right panel (users)
+
         tk.Label(self.right_frame, text="Players in room", font=("Courier", 12, "bold"), fg="#00e5ff", bg="#111").pack(pady=10)
         self.users_listbox = tk.Listbox(self.right_frame, font=("Courier", 12), bg="#0a0a0a", fg="white", selectbackground="#16213e")
         self.users_listbox.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
@@ -191,13 +187,13 @@ class MinesweeperGUI(tk.Tk):
     def _render_game_status(self):
         if self.status == "won":
             self.face_button.config(text="😎", bg="#69ff47")
-            self.status_label.config(text="MINEFIELD CLEARED — MISSION ACCOMPLISHED", fg="#69ff47")
+            self.status_label.config(text="Minefield cleared. Nice run!", fg="#69ff47")
         elif self.status == "lost":
             self.face_button.config(text="💀", bg="#ff6b6b")
-            self.status_label.config(text="DETONATION — GAME OVER", fg="#ff6b6b")
+            self.status_label.config(text="Boom. You hit a mine.", fg="#ff6b6b")
         else:
             self.face_button.config(text="🤖", bg="#1a1a1a")
-            self.status_label.config(text="Click left to reveal, right to flag", fg="#00e5ff")
+            self.status_label.config(text="Left click to reveal • right click to flag", fg="#00e5ff")
 
     def _stop_timer_if_finished(self):
         if self.status != "playing" and self.timer_id:

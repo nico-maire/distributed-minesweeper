@@ -24,8 +24,8 @@ class ConnectionState:
     def __init__(self):
         self.sock = None
         self.connected = False
-        self.port_index = 0             # index of node trying to connect to
-        self.lock = threading.Lock()    # mutex
+        self.port_index = 0
+        self.lock = threading.Lock()
 
 
 conn_state = ConnectionState()
@@ -89,7 +89,6 @@ def receive_updates(gui):
             if needs_reconnect:
                 time.sleep(1.5)
                 if connect_to_server():
-                    # After successful reconnection, rejoin current room
                     gui.controller.rejoin()
                     continue
                 else:
@@ -97,14 +96,14 @@ def receive_updates(gui):
                     gui.after(0, gui.quit)
                     break
             continue
-            
+
         msg_type = msg.get('type')
-        room_name = gui.controller.room_name  # Check what room user is in now
+        room_name = gui.controller.room_name
         if msg_type == 'init_rooms':
             rooms = msg.get('rooms', {})
             room_names = list(rooms.keys())
             gui.after(0, lambda r=room_names: gui.update_room_list(r))
-            
+
             state = rooms.get(room_name)
             if state:
                 gui.after(0, lambda s=state: gui.update_board(s))

@@ -1,13 +1,12 @@
 from protocol import send_message
 
-# Translates user interactions into game commands and sends them to the active server.
 class MinesweeperController:
     def __init__(self, conn_state):
         self.conn_state = conn_state
         self.room_name = "default"
         self.username = "Anonymous"
         self.view = None
-        self.joined = False  # Track if user has joined a room
+        self.joined = False
 
     def set_view(self, view):
         self.view = view
