@@ -192,22 +192,19 @@ def start_slave(host=HOST, port=PORT):
                     room = data['room']
                     room_users[room] = data['users']
             
-            # Send ACK back to leader
-            if op_id:
+            # Forward to next replica and wait for its ACK
+            if next_replica_socket:
                 try:
-                    ack_msg = {'type': 'ack', 'op_id': op_id}
-                    send_message(leader_socket, ack_msg)
+                    send_message(next_replica_socket, data)
+                    ack = receive_message(next_replica_socket)
                 except Exception as e:
-                    print(f'[!] Failed to send ACK to leader: {e}')
+                    print(f'[!] Error communicating with next replica: {e}')
             
-            # Forward to next replica (without op_id to avoid confusion)
-            if next_replica_socket and msg_type != 'init_rooms':
-                forward_data = dict(data)
-                forward_data.pop('op_id', None)  # Remove op_id before forwarding
-                try:
-                    send_message(next_replica_socket, forward_data)
-                except Exception:
-                    pass
+            # Send ACK back to leader
+            try:
+                send_message(leader_socket, {'type': 'ack'})
+            except Exception as e:
+                print(f'[!] Failed to send ACK to leader: {e}')
                 
     except Exception as e:
         print(e)
