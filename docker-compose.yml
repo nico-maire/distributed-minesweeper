@@ -39,6 +39,26 @@ services:
     networks:
       - minesweeper-net
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    # network_mode: host gives Tkinter access to the X11 socket on Linux
+    # and lets the container reach the backend via localhost:<exposed-ports>
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - LEADER_HOST=localhost
+      - LEADER_PORT=5000
+      - SLAVE_1_HOST=localhost
+      - SLAVE_1_PORT=6000
+      - SLAVE_2_HOST=localhost
+      - SLAVE_2_PORT=7000
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    depends_on:
+      - leader
+
 networks:
   minesweeper-net:
     driver: bridge

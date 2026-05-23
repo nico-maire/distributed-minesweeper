@@ -1,28 +1,29 @@
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 class Minesweeper:
-    def __init__(self, rows: int, cols: int, num_mines: int):
+    def __init__(self, rows: int, cols: int, num_mines: int, seed: Optional[int] = None):
         self.rows = rows
         self.cols = cols
         self.num_mines = num_mines
+        self.seed = seed
         self.state = 'playing'  # 'playing', 'won', 'lost'
-        
+
         # Grid state
         self.mines = [[False for _ in range(cols)] for _ in range(rows)]
         self.revealed = [[False for _ in range(cols)] for _ in range(rows)]
         self.flags = [[False for _ in range(cols)] for _ in range(rows)]
         self.adjacent_mines = [[0 for _ in range(cols)] for _ in range(rows)]
-        
+
         self.mines_placed = False
 
     def _place_mines(self, first_r: int, first_c: int):
-        # Prevent placing a mine on the first clicked cell
+        rng = random.Random(self.seed) if self.seed is not None else random
         positions = [(r, c) for r in range(self.rows) for c in range(self.cols) if (r, c) != (first_r, first_c)]
-        mine_positions = random.sample(positions, min(self.num_mines, len(positions)))
+        mine_positions = rng.sample(positions, min(self.num_mines, len(positions)))
         for r, c in mine_positions:
             self.mines[r][c] = True
-            
+
         self._calculate_all_adjacent()
         self.mines_placed = True
 
@@ -85,23 +86,22 @@ class Minesweeper:
         self.state = 'won'
 
     def to_dict(self) -> Dict[str, Any]:
-        """Devuelve el estado completo del juego en un diccionario."""
         return {
             'rows': self.rows,
             'cols': self.cols,
             'num_mines': self.num_mines,
+            'seed': self.seed,
             'state': self.state,
             'mines_placed': self.mines_placed,
             'mines': self.mines,
             'revealed': self.revealed,
             'flags': self.flags,
-            'adjacent_mines': self.adjacent_mines
+            'adjacent_mines': self.adjacent_mines,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Minesweeper':
-        """Reconstruye una instancia exacta del juego a partir de un diccionario."""
-        instance = cls(data['rows'], data['cols'], data['num_mines'])
+        instance = cls(data['rows'], data['cols'], data['num_mines'], seed=data.get('seed'))
         instance.state = data['state']
         instance.mines_placed = data['mines_placed']
         instance.mines = data['mines']

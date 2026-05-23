@@ -2,6 +2,28 @@ import json
 import struct
 import socket
 
+# Replication message types (leader ↔ follower)
+PREPARE_COMMAND = 'prepare_command'
+PREPARE_ACK     = 'prepare_ack'
+COMMIT_COMMAND  = 'commit_command'
+COMMIT_ACK      = 'commit_ack'
+
+# State-sync message types (leader → client / follower → client after promotion)
+INIT_ROOMS   = 'init_rooms'
+UPDATE_ROOM  = 'update_room'
+UPDATE_USERS = 'update_users'
+
+# Introspection (testing only)
+GET_STATE    = 'get_state'
+STATE_REPLY  = 'state_reply'
+
+# Client action types
+ACTION_JOIN       = 'join'
+ACTION_REVEAL     = 'reveal'
+ACTION_FLAG       = 'flag'
+ACTION_RESTART    = 'restart'
+ACTION_CREATE_ROOM = 'create_room'
+
 def send_message(sock, message_dict):
     """
     Converts a dictionary to JSON, encodes it to UTF-8 and sends it over the socket
