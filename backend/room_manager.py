@@ -35,18 +35,23 @@ class RoomManager:
 
     def broadcast_to_room(self, room: str, message: dict) -> None:
         with self._lock:
-            if room not in self._clients:
-                return
-            dead = []
-            for sock in self._clients[room]:
-                try:
-                    if not send_message(sock, message):
-                        dead.append(sock)
-                except Exception:
-                    dead.append(sock)
-            for s in dead:
-                if s in self._clients[room]:
-                    self._clients[room].remove(s)
+            sockets = list(self._clients.get(room, []))
+
+        dead = []
+        for sock in sockets:
+            try:
+                send_message(sock, message)
+            except Exception:
+                dead.append(sock)
+
+        if dead:
+            with self._lock:
+                bucket = self._clients.get(room, [])
+                for s in dead:
+                    try:
+                        bucket.remove(s)
+                    except ValueError:
+                        pass
 
     def broadcast_all(self, message: dict) -> None:
         with self._lock:

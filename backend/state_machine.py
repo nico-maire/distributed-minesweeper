@@ -28,11 +28,23 @@ class GameStateMachine:
         Applies a single committed command to the state machine.
         Returns the resulting game state dict for the affected room,
         or {} if the room is not found after the command.
+        Raises ValueError if the sequence number is out of order.
         """
         t    = command.get('type')
         room = command.get('room')
+        seq  = command.get('seq', 0)
 
         with self._lock:
+            if seq <= self.last_committed_seq:
+                # Duplicate — idempotent: return current state unchanged
+                return self._games[room].to_dict() if room in self._games else {}
+
+            expected = self.last_committed_seq + 1
+            if seq != expected:
+                raise ValueError(
+                    f'Sequence gap: expected {expected}, got {seq}'
+                )
+
             if t == ACTION_CREATE_ROOM:
                 self._games[room] = Minesweeper(
                     command['rows'], command['cols'],

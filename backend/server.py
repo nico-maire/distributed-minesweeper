@@ -7,12 +7,11 @@ import uuid
 
 from protocol import (
     send_message, receive_message,
-    PREPARE_COMMAND, PREPARE_ACK,
-    COMMIT_COMMAND, COMMIT_ACK,
     INIT_ROOMS, UPDATE_ROOM, UPDATE_USERS,
     GET_STATE, STATE_REPLY,
     ACTION_JOIN, ACTION_REVEAL, ACTION_FLAG, ACTION_RESTART, ACTION_CREATE_ROOM,
 )
+from replication import ChainReplicationManager
 from room_manager import RoomManager
 from state_machine import GameStateMachine
 
@@ -20,109 +19,9 @@ from state_machine import GameStateMachine
 # Global state
 # ---------------------------------------------------------------------------
 
-state_machine  = GameStateMachine()
-room_manager   = RoomManager()
-follower_socket = None          # connection to follower-1
-
-# Sequence counter — total order across all rooms
-_seq_counter = 0
-_seq_lock    = threading.Lock()
-
-# ACK table: (op_id, ack_type) -> True
-_ack_received = {}
-_ack_lock     = threading.Lock()
-
-
-def _next_seq() -> int:
-    global _seq_counter
-    with _seq_lock:
-        _seq_counter += 1
-        return _seq_counter
-
-
-# ---------------------------------------------------------------------------
-# Replication helpers
-# ---------------------------------------------------------------------------
-
-def _listen_for_acks() -> None:
-    """Daemon thread: reads PREPARE_ACK / COMMIT_ACK from follower-1."""
-    global follower_socket
-    while True:
-        if not follower_socket:
-            time.sleep(0.5)
-            continue
-        try:
-            msg = receive_message(follower_socket)
-            if not msg:
-                time.sleep(1)
-                continue
-            msg_type = msg.get('type')
-            op_id    = msg.get('op_id')
-            if msg_type in (PREPARE_ACK, COMMIT_ACK) and op_id:
-                with _ack_lock:
-                    _ack_received[(op_id, msg_type)] = True
-        except Exception:
-            time.sleep(1)
-
-
-def _wait_for_ack(op_id: str, ack_type: str, timeout: float = 5.0) -> bool:
-    key      = (op_id, ack_type)
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        with _ack_lock:
-            if key in _ack_received:
-                _ack_received.pop(key)
-                return True
-        time.sleep(0.01)
-    with _ack_lock:
-        _ack_received.pop(key, None)
-    return False
-
-
-def _replicate(command: dict) -> bool:
-    """
-    Runs the 2-phase PREPARE/COMMIT protocol with follower-1.
-    Returns True only when the follower (chain) has committed the operation.
-    If no follower is connected, returns True (solo mode).
-    """
-    if not follower_socket:
-        return True
-
-    seq   = command['seq']
-    op_id = command['op_id']
-
-    # Phase 1 — PREPARE
-    try:
-        send_message(follower_socket, {
-            'type': PREPARE_COMMAND,
-            'seq': seq,
-            'op_id': op_id,
-            'command': command,
-        })
-    except Exception as e:
-        print(f'[!] Failed to send PREPARE to follower: {e}')
-        return False
-
-    if not _wait_for_ack(op_id, PREPARE_ACK):
-        print(f'[!] PREPARE_ACK timeout for op {op_id} seq={seq}')
-        return False
-
-    # Phase 2 — COMMIT
-    try:
-        send_message(follower_socket, {
-            'type': COMMIT_COMMAND,
-            'seq': seq,
-            'op_id': op_id,
-        })
-    except Exception as e:
-        print(f'[!] Failed to send COMMIT to follower: {e}')
-        return False
-
-    if not _wait_for_ack(op_id, COMMIT_ACK):
-        print(f'[!] COMMIT_ACK timeout for op {op_id} seq={seq}')
-        return False
-
-    return True
+state_machine = GameStateMachine()
+room_manager  = RoomManager()
+replication   = ChainReplicationManager()
 
 
 # ---------------------------------------------------------------------------
@@ -131,10 +30,8 @@ def _replicate(command: dict) -> bool:
 
 def _handle_client(client_socket, address) -> None:
     print(f'[*] Client connected from {address}')
-
-    # Send current state of all rooms
     send_message(client_socket, {
-        'type': INIT_ROOMS,
+        'type' : INIT_ROOMS,
         'rooms': state_machine.get_all_states(),
     })
 
@@ -147,58 +44,47 @@ def _handle_client(client_socket, address) -> None:
             if not msg:
                 break
 
-            # Introspection endpoint (used by integration tests)
             if msg.get('type') == GET_STATE:
                 send_message(client_socket, {
-                    'type': STATE_REPLY,
+                    'type'              : STATE_REPLY,
                     'last_committed_seq': state_machine.last_committed_seq,
-                    'committed_log_len': state_machine.get_committed_log_length(),
-                    'rooms': state_machine.get_all_states(),
+                    'committed_log_len' : state_machine.get_committed_log_length(),
+                    'rooms'             : state_machine.get_all_states(),
                 })
                 continue
 
             action = msg.get('action')
             room   = msg.get('room', 'default')
 
-            # ----------------------------------------------------------------
-            # JOIN
-            # ----------------------------------------------------------------
             if action == ACTION_JOIN:
                 client_username = msg.get('username', 'Anonymous')
                 client_room     = room
 
-                # Create room via SMR if it doesn't exist yet
                 if not state_machine.has_room(room):
                     seed = random.randint(0, 2**32)
                     cmd  = {
-                        'seq'  : _next_seq(),
+                        'seq'  : replication.next_seq(),
                         'op_id': str(uuid.uuid4()),
                         'type' : ACTION_CREATE_ROOM,
                         'room' : room,
-                        'rows' : 10,
-                        'cols' : 10,
-                        'mines': 10,
+                        'rows' : 10, 'cols': 10, 'mines': 10,
                         'seed' : seed,
                     }
-                    if _replicate(cmd):
-                        state_machine.apply_command(cmd)
-                    else:
-                        print(f'[!] Could not replicate create_room for {room}')
+                    if not replication.replicate(cmd):
+                        send_message(client_socket, {
+                            'type': 'error',
+                            'reason': 'room_creation_replication_failed',
+                        })
+                        continue
+                    state_machine.apply_command(cmd)
 
-                # Register socket and user in the room manager
                 room_manager.add_client(room, client_socket)
                 users = room_manager.add_user(room, client_username)
-
-                # Propagate user-list update to follower (fire-and-forget, not via PREPARE/COMMIT)
+                # UPDATE_USERS is fire-and-forget: active user sessions are
+                # transient state and are reconstructed on client rejoin.
                 users_msg = {'type': UPDATE_USERS, 'room': room, 'users': users}
-                if follower_socket:
-                    try:
-                        send_message(follower_socket, users_msg)
-                    except Exception:
-                        pass
+                replication.send_direct(users_msg)
                 room_manager.broadcast_to_room(room, users_msg)
-
-                # Send current board to the joining client
                 send_message(client_socket, {
                     'type' : UPDATE_ROOM,
                     'room' : room,
@@ -206,56 +92,42 @@ def _handle_client(client_socket, address) -> None:
                 })
                 continue
 
-            # ----------------------------------------------------------------
-            # GAME ACTIONS
-            # ----------------------------------------------------------------
             r = msg.get('r', 0)
             c = msg.get('c', 0)
 
             if action in (ACTION_REVEAL, ACTION_FLAG):
                 cmd = {
-                    'seq'  : _next_seq(),
+                    'seq'  : replication.next_seq(),
                     'op_id': str(uuid.uuid4()),
                     'type' : action,
-                    'room' : room,
-                    'row'  : r,
-                    'col'  : c,
+                    'room' : room, 'row': r, 'col': c,
                 }
-                if not _replicate(cmd):
+                if not replication.replicate(cmd):
                     send_message(client_socket, {
-                        'type'  : 'error',
-                        'reason': 'replication_failed',
-                        'op_id' : cmd['op_id'],
+                        'type': 'error', 'reason': 'replication_failed',
                     })
                     continue
                 new_state = state_machine.apply_command(cmd)
                 room_manager.broadcast_to_room(room, {
-                    'type' : UPDATE_ROOM,
-                    'room' : room,
-                    'state': new_state,
+                    'type': UPDATE_ROOM, 'room': room, 'state': new_state,
                 })
 
             elif action == ACTION_RESTART:
                 seed = random.randint(0, 2**32)
                 cmd  = {
-                    'seq'  : _next_seq(),
+                    'seq'  : replication.next_seq(),
                     'op_id': str(uuid.uuid4()),
                     'type' : ACTION_RESTART,
-                    'room' : room,
-                    'seed' : seed,
+                    'room' : room, 'seed': seed,
                 }
-                if not _replicate(cmd):
+                if not replication.replicate(cmd):
                     send_message(client_socket, {
-                        'type'  : 'error',
-                        'reason': 'replication_failed',
-                        'op_id' : cmd['op_id'],
+                        'type': 'error', 'reason': 'replication_failed',
                     })
                     continue
                 new_state = state_machine.apply_command(cmd)
                 room_manager.broadcast_to_room(room, {
-                    'type' : UPDATE_ROOM,
-                    'room' : room,
-                    'state': new_state,
+                    'type': UPDATE_ROOM, 'room': room, 'state': new_state,
                 })
 
     except Exception as e:
@@ -266,9 +138,7 @@ def _handle_client(client_socket, address) -> None:
             users = room_manager.remove_user(client_room, client_username)
             room_manager.remove_client(client_socket)
             room_manager.broadcast_to_room(client_room, {
-                'type' : UPDATE_USERS,
-                'room' : client_room,
-                'users': users,
+                'type': UPDATE_USERS, 'room': client_room, 'users': users,
             })
         else:
             room_manager.remove_client(client_socket)
@@ -279,11 +149,7 @@ def _handle_client(client_socket, address) -> None:
 # ---------------------------------------------------------------------------
 
 def _admin_server(host: str, port: int) -> None:
-    """
-    Lightweight introspection endpoint used by integration tests.
-    Listens on ADMIN_PORT and responds to GET_STATE queries.
-    Runs as a daemon thread alongside the main server.
-    """
+    """Introspection endpoint used by integration tests."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind((host, port))
@@ -305,33 +171,36 @@ def _admin_server(host: str, port: int) -> None:
 
 
 def start_server() -> None:
-    global follower_socket
-
-    HOST        = os.environ.get('HOST', '0.0.0.0')
-    PORT        = int(os.environ.get('PORT', 5000))
-    SLAVE_HOST  = os.environ.get('SLAVE_HOST', 'localhost')
-    SLAVE_PORT  = int(os.environ.get('SLAVE_PORT', 6000))
-    ADMIN_PORT  = int(os.environ.get('ADMIN_PORT', PORT + 100))
+    HOST       = os.environ.get('HOST', '0.0.0.0')
+    PORT       = int(os.environ.get('PORT', 5000))
+    SLAVE_HOST = os.environ.get('SLAVE_HOST', 'localhost')
+    SLAVE_PORT = int(os.environ.get('SLAVE_PORT', 6000))
+    ADMIN_PORT = int(os.environ.get('ADMIN_PORT', PORT + 100))
 
     # Connect to follower-1
-    follower_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    follower_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while True:
         try:
-            follower_socket.connect((SLAVE_HOST, SLAVE_PORT))
+            follower_sock.connect((SLAVE_HOST, SLAVE_PORT))
             print(f'[+] Connected to follower-1 at {SLAVE_HOST}:{SLAVE_PORT}')
             break
         except socket.error:
             print('[*] Retrying connection to follower-1...')
             time.sleep(2)
 
-    # Start ACK listener thread
-    threading.Thread(target=_listen_for_acks, daemon=True).start()
+    replication.set_follower(follower_sock)
 
-    # Start admin / introspection server
+    # Send current state (including seq) so followers start in sync
+    send_message(follower_sock, {
+        'type'              : INIT_ROOMS,
+        'rooms'             : state_machine.get_all_states(),
+        'last_committed_seq': state_machine.last_committed_seq,
+    })
+
+    threading.Thread(target=replication.listen_for_acks, daemon=True).start()
     threading.Thread(target=_admin_server, args=(HOST, ADMIN_PORT), daemon=True).start()
     print(f'[+] Admin introspection on {HOST}:{ADMIN_PORT}')
 
-    # Accept clients
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PORT))
