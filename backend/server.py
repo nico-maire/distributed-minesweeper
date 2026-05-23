@@ -15,18 +15,9 @@ from replication import ChainReplicationManager
 from room_manager import RoomManager
 from state_machine import GameStateMachine
 
-# ---------------------------------------------------------------------------
-# Global state
-# ---------------------------------------------------------------------------
-
 state_machine = GameStateMachine()
 room_manager  = RoomManager()
 replication   = ChainReplicationManager()
-
-
-# ---------------------------------------------------------------------------
-# Client handler
-# ---------------------------------------------------------------------------
 
 def _handle_client(client_socket, address) -> None:
     print(f'[*] Client connected from {address}')
@@ -143,11 +134,6 @@ def _handle_client(client_socket, address) -> None:
         else:
             room_manager.remove_client(client_socket)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
 def _admin_server(host: str, port: int) -> None:
     """Introspection endpoint used by integration tests."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -177,7 +163,6 @@ def start_server() -> None:
     SLAVE_PORT = int(os.environ.get('SLAVE_PORT', 6000))
     ADMIN_PORT = int(os.environ.get('ADMIN_PORT', PORT + 100))
 
-    # Connect to follower-1
     follower_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while True:
         try:
@@ -190,7 +175,7 @@ def start_server() -> None:
 
     replication.set_follower(follower_sock)
 
-    # Send current state (including seq) so followers start in sync
+    # Followers must receive the current sequence so SMR ordering remains contiguous.
     send_message(follower_sock, {
         'type'              : INIT_ROOMS,
         'rooms'             : state_machine.get_all_states(),

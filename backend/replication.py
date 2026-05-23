@@ -22,13 +22,11 @@ class ChainReplicationManager:
     """
 
     def __init__(self):
-        self._follower    = None   # socket to the next replica
+        self._follower    = None
         self._seq_counter = 0
         self._seq_lock    = threading.Lock()
         self._ack_received = {}
         self._ack_lock     = threading.Lock()
-
-    # ------------------------------------------------------------------ seq
 
     def next_seq(self) -> int:
         with self._seq_lock:
@@ -39,15 +37,11 @@ class ChainReplicationManager:
         with self._seq_lock:
             self._seq_counter = value
 
-    # ------------------------------------------------------------------ follower
-
     def set_follower(self, sock) -> None:
         self._follower = sock
 
     def has_follower(self) -> bool:
         return self._follower is not None
-
-    # ------------------------------------------------------------------ ACK listener (daemon thread target)
 
     def listen_for_acks(self) -> None:
         """Reads PREPARE_ACK / COMMIT_ACK from the next replica indefinitely."""
@@ -68,8 +62,6 @@ class ChainReplicationManager:
             except Exception:
                 time.sleep(1)
 
-    # ------------------------------------------------------------------ ACK waiting
-
     def wait_ack(self, op_id: str, ack_type: str, timeout: float = 5.0) -> bool:
         key      = (op_id, ack_type)
         deadline = time.time() + timeout
@@ -82,8 +74,6 @@ class ChainReplicationManager:
         with self._ack_lock:
             self._ack_received.pop(key, None)
         return False
-
-    # ------------------------------------------------------------------ send helpers
 
     def send_to_follower(self, message: dict) -> bool:
         """Send a message directly to the next replica. Returns False on error."""
@@ -103,8 +93,6 @@ class ChainReplicationManager:
                 send_message(self._follower, message)
             except Exception:
                 pass
-
-    # ------------------------------------------------------------------ PREPARE/COMMIT
 
     def replicate(self, command: dict) -> bool:
         """

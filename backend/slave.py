@@ -10,17 +10,8 @@ from replication import ChainReplicationManager
 from room_manager import RoomManager
 from state_machine import GameStateMachine
 
-# ---------------------------------------------------------------------------
-# Module-level state shared between follower and promoted-leader phases
-# ---------------------------------------------------------------------------
-
 state_machine = GameStateMachine()
 room_manager  = RoomManager()
-
-
-# ---------------------------------------------------------------------------
-# Admin / introspection server (runs throughout both phases)
-# ---------------------------------------------------------------------------
 
 def _admin_server(host: str, port: int) -> None:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,11 +32,6 @@ def _admin_server(host: str, port: int) -> None:
             conn.close()
         except Exception:
             pass
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 def start_slave() -> None:
     HOST = os.environ.get('HOST', '0.0.0.0')
@@ -82,7 +68,6 @@ def start_slave() -> None:
             target=replication.listen_for_acks, daemon=True,
         ).start()
 
-    # Accept the upstream connection (leader for F1, F1 for F2)
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PORT))
@@ -92,11 +77,9 @@ def start_slave() -> None:
     leader_socket, leader_addr = server_socket.accept()
     print(f'[+] Upstream connected from {leader_addr}')
 
-    # --- Follower phase (blocks until upstream disconnects) ---
     follower = FollowerRuntime(state_machine, room_manager, replication)
     follower.run(leader_socket)
 
-    # --- Promotion ---
     print('[+] Promoted to leader — accepting client connections')
     replication.set_seq(state_machine.last_committed_seq)
 

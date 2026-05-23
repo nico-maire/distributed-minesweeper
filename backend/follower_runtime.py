@@ -40,7 +40,7 @@ class FollowerRuntime:
         Blocks until the upstream connection closes.
         Pending (uncommitted) operations are discarded on exit.
         """
-        pending_ops: dict = {}  # seq -> {'op_id': str, 'command': dict}
+        pending_ops: dict = {}
 
         try:
             while True:
@@ -53,16 +53,16 @@ class FollowerRuntime:
                 op_id    = data.get('op_id')
                 seq      = data.get('seq')
 
-                # ---- PREPARE_COMMAND ----------------------------------------
                 if msg_type == PREPARE_COMMAND:
                     command = data.get('command', {})
                     pending_ops[seq] = {'op_id': op_id, 'command': command}
 
                     if self._repl.has_follower():
+                        # Upstream ACK is sent only after downstream durability in the chain.
                         if not self._repl.send_to_follower(data):
-                            continue  # forward failed — do not ACK upstream
+                            continue
                         if not self._repl.wait_ack(op_id, PREPARE_ACK):
-                            continue  # next replica timed out — do not ACK upstream
+                            continue
 
                     try:
                         send_message(leader_socket, {
@@ -71,7 +71,6 @@ class FollowerRuntime:
                     except Exception:
                         pass
 
-                # ---- COMMIT_COMMAND -----------------------------------------
                 elif msg_type == COMMIT_COMMAND:
                     if self._repl.has_follower():
                         if not self._repl.send_to_follower(data):
@@ -93,7 +92,6 @@ class FollowerRuntime:
                     except Exception:
                         pass
 
-                # ---- INIT_ROOMS (state sync at connection time) --------------
                 elif msg_type == INIT_ROOMS:
                     with self._sm._lock:
                         for room, st in data.get('rooms', {}).items():
@@ -104,7 +102,6 @@ class FollowerRuntime:
                     if self._repl.has_follower():
                         self._repl.send_to_follower(data)
 
-                # ---- UPDATE_USERS (fire-and-forget user-list replication) ----
                 elif msg_type == UPDATE_USERS:
                     room  = data.get('room')
                     users = data.get('users', [])

@@ -17,11 +17,9 @@ class GameStateMachine:
 
     def __init__(self):
         self._lock             = threading.Lock()
-        self._games            = {}   # room -> Minesweeper
+        self._games            = {}
         self.last_committed_seq = 0
-        self.committed_log     = []   # list of committed command dicts
-
-    # ------------------------------------------------------------------ apply
+        self.committed_log     = []
 
     def apply_command(self, command: dict) -> dict:
         """
@@ -70,8 +68,6 @@ class GameStateMachine:
             self.committed_log.append(command)
 
             return self._games[room].to_dict() if room in self._games else {}
-
-    # ------------------------------------------------------------------ read
 
     def get_state(self, room: str) -> dict:
         with self._lock:

@@ -9,11 +9,9 @@ class RoomManager:
     """
 
     def __init__(self):
-        self._clients = {}   # room -> [socket]
-        self._users   = {}   # room -> [username]
+        self._clients = {}
+        self._users   = {}
         self._lock    = threading.Lock()
-
-    # ------------------------------------------------------------------ clients
 
     def add_client(self, room: str, sock) -> None:
         with self._lock:
@@ -58,8 +56,6 @@ class RoomManager:
             rooms = list(self._clients.keys())
         for room in rooms:
             self.broadcast_to_room(room, message)
-
-    # ------------------------------------------------------------------ users
 
     def add_user(self, room: str, username: str) -> list:
         """Adds username to room and returns the updated list."""

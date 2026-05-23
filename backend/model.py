@@ -7,9 +7,7 @@ class Minesweeper:
         self.cols = cols
         self.num_mines = num_mines
         self.seed = seed
-        self.state = 'playing'  # 'playing', 'won', 'lost'
-
-        # Grid state
+        self.state = 'playing'
         self.mines = [[False for _ in range(cols)] for _ in range(rows)]
         self.revealed = [[False for _ in range(cols)] for _ in range(rows)]
         self.flags = [[False for _ in range(cols)] for _ in range(rows)]
