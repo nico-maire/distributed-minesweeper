@@ -1,6 +1,8 @@
 import unittest
 
-from backend.model import Minesweeper
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+from model import Minesweeper
 
 
 class TestMinesweeperModel(unittest.TestCase):

@@ -79,18 +79,21 @@ class FollowerRuntime:
                             continue
 
                     entry = pending_ops.pop(seq, None)
+                    applied = True
                     if entry:
                         try:
                             self._sm.apply_command(entry['command'])
                         except ValueError as e:
                             print(f'[!] State machine error: {e}')
+                            applied = False
 
-                    try:
-                        send_message(leader_socket, {
-                            'type': COMMIT_ACK, 'op_id': op_id, 'seq': seq,
-                        })
-                    except Exception:
-                        pass
+                    if applied:
+                        try:
+                            send_message(leader_socket, {
+                                'type': COMMIT_ACK, 'op_id': op_id, 'seq': seq,
+                            })
+                        except Exception:
+                            pass
 
                 elif msg_type == INIT_ROOMS:
                     with self._sm._lock:

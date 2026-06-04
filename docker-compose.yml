@@ -46,6 +46,7 @@ services:
     # network_mode: host gives Tkinter access to the X11 socket on Linux
     # and lets the container reach the backend via localhost:<exposed-ports>
     network_mode: host
+    command: sh -c "sleep 12 && python -u client.py"
     environment:
       - DISPLAY=${DISPLAY}
       - LEADER_HOST=localhost

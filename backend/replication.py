@@ -27,6 +27,7 @@ class ChainReplicationManager:
         self._seq_lock    = threading.Lock()
         self._ack_received = {}
         self._ack_lock     = threading.Lock()
+        self._repl_lock    = threading.Lock()
 
     def next_seq(self) -> int:
         with self._seq_lock:
@@ -103,33 +104,34 @@ class ChainReplicationManager:
         if not self._follower:
             return True
 
-        seq   = command['seq']
-        op_id = command['op_id']
+        with self._repl_lock:
+            seq   = command['seq']
+            op_id = command['op_id']
 
-        try:
-            send_message(self._follower, {
-                'type': PREPARE_COMMAND,
-                'seq': seq, 'op_id': op_id, 'command': command,
-            })
-        except Exception as e:
-            print(f'[!] PREPARE send failed: {e}')
-            return False
+            try:
+                send_message(self._follower, {
+                    'type': PREPARE_COMMAND,
+                    'seq': seq, 'op_id': op_id, 'command': command,
+                })
+            except Exception as e:
+                print(f'[!] PREPARE send failed: {e}')
+                return False
 
-        if not self.wait_ack(op_id, PREPARE_ACK):
-            print(f'[!] PREPARE_ACK timeout for op {op_id}')
-            return False
+            if not self.wait_ack(op_id, PREPARE_ACK):
+                print(f'[!] PREPARE_ACK timeout for op {op_id}')
+                return False
 
-        try:
-            send_message(self._follower, {
-                'type': COMMIT_COMMAND,
-                'seq': seq, 'op_id': op_id,
-            })
-        except Exception as e:
-            print(f'[!] COMMIT send failed: {e}')
-            return False
+            try:
+                send_message(self._follower, {
+                    'type': COMMIT_COMMAND,
+                    'seq': seq, 'op_id': op_id,
+                })
+            except Exception as e:
+                print(f'[!] COMMIT send failed: {e}')
+                return False
 
-        if not self.wait_ack(op_id, COMMIT_ACK):
-            print(f'[!] COMMIT_ACK timeout for op {op_id}')
-            return False
+            if not self.wait_ack(op_id, COMMIT_ACK):
+                print(f'[!] COMMIT_ACK timeout for op {op_id}')
+                return False
 
-        return True
+            return True

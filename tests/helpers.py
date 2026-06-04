@@ -175,7 +175,7 @@ class ThreeNodeCluster(unittest.TestCase):
             env=f2_env, cwd=BACKEND_DIR,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-        time.sleep(0.8)
+        time.sleep(1.5)
 
         f1_env = {
             **os.environ,
@@ -189,7 +189,7 @@ class ThreeNodeCluster(unittest.TestCase):
             env=f1_env, cwd=BACKEND_DIR,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-        time.sleep(0.8)
+        time.sleep(1.5)
 
         leader_env = {
             **os.environ,
